@@ -2,16 +2,17 @@
 
 import matplotlib.pyplot as plt
 import numpy as np
-
+import os
 from PyFlyt.core import Aviary, loadOBJ, obj_collision, obj_visual
 
+os.environ["CUDA_VISIBLE_DEVICES"] = "0" #force to use gpu on my system
 # initialize the log
 log = np.zeros((1000, 3), dtype=np.float32)
 
 # the starting position and orientations
 start_pos = np.array([[0.0, 0.0, 1.0]])
 start_orn = np.array([[0.0, 0.0, 0.0]])
-options=dict(use_camera=True)
+options={"use_camera":True,"camera_fps":30}
 
 # environment setup
 env = Aviary(start_pos=start_pos, start_orn=start_orn, render=True, drone_type="quadx", drone_options=options)
@@ -28,7 +29,7 @@ loadOBJ(
     visualId=visualId,
     collisionId=collisionId,
     baseMass=1.0,
-    basePosition=[0.0, 0.0, 10.0],
+    basePosition=[2.0, 2.0, 0.0],
 )
 
 # call this to register all new bodies for collision
