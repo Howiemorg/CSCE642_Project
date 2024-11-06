@@ -1,21 +1,13 @@
-import gymnasium as gym
 import optparse
 import sys
 import os
 import random
-import numpy as np
-import torch
 
-gym.logger.set_level(40)
-
-
-from lib import plotting
+# from lib import plotting
 from Solvers.Abstract_Solver import AbstractSolver, Statistics
 import Solvers.Available_solvers as avs
 import Domains.Available_domains as dvs
 
-
-import matplotlib
 import matplotlib.pyplot as plt
 
 
@@ -137,14 +129,14 @@ def build_parser():
         default=500000,
         help="Size of the replay memory",
     )
-    parser.add_option(
-        "-N",
-        "--update",
-        type="int",
-        dest="update_target_estimator_every",
-        default=10000,
-        help="Copy parameters from the Q estimator to the target estimator every N steps.",
-    )
+    # parser.add_option(
+    #     "-N",
+    #     "--update",
+    #     type="int",
+    #     dest="update_target_estimator_every",
+    #     default=10000,
+    #     help="Copy parameters from the Q estimator to the target estimator every N steps.",
+    # )
     parser.add_option(
         "-b",
         "--batch_size",
@@ -186,7 +178,7 @@ def main(options):
     random.seed(options.seed)
     # env = getEnv(options.domain)
 
-    env = PyFlytGymEnv(options.domain)
+    # env = PyFlytGymEnv(options.domain)
     env = dvs.get_domain_class(options.domain)
 
     env._max_episode_steps = options.steps + 1  # suppress truncation
@@ -208,14 +200,14 @@ def main(options):
     solver = avs.get_solver_class(options.solver)(env, eval_env, options)
 
     # Keeps track of useful statistics
-    stats = plotting.EpisodeStats(episode_lengths=[], episode_rewards=[])
+    # stats = plotting.EpisodeStats(episode_lengths=[], episode_rewards=[])
 
     plt.ion()
-    if not options.disable_plots:
-        # Detects key press for rendering
-        from pynput import keyboard
-        listener = keyboard.Listener(on_press=on_press)
-        listener.start()  # start listening on a separate thread
+    # if not options.disable_plots:
+    #     # Detects key press for rendering
+    #     from pynput import keyboard
+    #     listener = keyboard.Listener(on_press=on_press)
+    #     listener.start()  # start listening on a separate thread
 
 
     with open(os.path.join(resultdir, options.outfile + ".csv"), "a+") as result_file:
@@ -230,22 +222,22 @@ def main(options):
             if options.epsilon > options.epsilon_end:
                 options.epsilon *= options.epsilon_decay
             # Update statistics
-            stats.episode_rewards.append(solver.statistics[Statistics.Rewards.value])
-            stats.episode_lengths.append(solver.statistics[Statistics.Steps.value])
-            print(
-                f"Episode {i_episode+1}: Reward {solver.statistics[Statistics.Rewards.value]}, Steps {solver.statistics[Statistics.Steps.value]}"
-            )
+            # stats.episode_rewards.append(solver.statistics[Statistics.Rewards.value])
+            # stats.episode_lengths.append(solver.statistics[Statistics.Steps.value])
+            # print(
+            #     f"Episode {i_episode+1}: Reward {solver.statistics[Statistics.Rewards.value]}, Steps {solver.statistics[Statistics.Steps.value]}"
+            # )
 
 
-    if not options.disable_plots:
-        solver.run_greedy()
-        solver.plot(stats, int(0.1 * options.episodes), True)
-        if options.solver == "aql" and "MountainCar-v0" in str(env):
-            solver.plot_q_function()
-        solver.close()
-    plt.ioff()
+    # if not options.disable_plots:
+    #     solver.run_greedy()
+    #     solver.plot(stats, int(0.1 * options.episodes), True)
+    #     if options.solver == "aql" and "MountainCar-v0" in str(env):
+    #         solver.plot_q_function()
+    #     solver.close()
+    # plt.ioff()
 
-    return {"stats": stats, "solver": solver}
+    # return {"stats": stats, "solver": solver}
 
 
 if __name__ == "__main__":

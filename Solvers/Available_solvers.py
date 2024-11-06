@@ -5,6 +5,7 @@ solvers = [
     "greedy",
     "eplison_greedy",
     "a2c",
+    "a2c_elig"
 ]
 
 
@@ -21,6 +22,9 @@ def get_solver_class(name):
     elif name == solvers[3]:
         from Solvers.A2CAgent import A2CAgent
         return A2CAgent
+    elif name == solvers[4]:
+        from Solvers.A2CEligibility import A2CEligibility
+        return A2CEligibility
     else:
         assert False, "unknown solver name {}. solver must be from {}".format(
             name, str(solvers)
