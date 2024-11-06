@@ -49,7 +49,7 @@ class CriticNetwork(nn.Module):
         return torch.squeeze(value, -1)
 
 
-class A2CEgilibility(AbstractSolver):
+class A2CEligibility(AbstractSolver):
     def __init__(self, env, eval_env, options):
         super().__init__(env, eval_env, options)
         # Create actor-critic network
@@ -59,7 +59,7 @@ class A2CEgilibility(AbstractSolver):
         self.policy = self.create_greedy_policy()
 
         self.actor_optimizer = Adam(
-            self.actor.parameters(), lr=self.options.actor_alpha)
+            self.actor.parameters(), lr=self.options.alpha)
 
         # self.z_actor = torch.zeros(self.actor.total_params_amt)
         self.z_actor = [torch.zeros_like(
@@ -70,7 +70,7 @@ class A2CEgilibility(AbstractSolver):
         )
 
         self.critic_optimizer = Adam(
-            self.critic.parameters(), lr=self.options.critic_alpha)
+            self.critic.parameters(), lr=self.options.alpha)
 
         # self.z_critic = torch.zeros(self.critic.total_params_amt)
         self.z_critic = [torch.zeros_like(
@@ -110,25 +110,29 @@ class A2CEgilibility(AbstractSolver):
 
         return action, probs[action], value
 
-    def update_critic(self, advantage):
-        for param, eligibility_trace in zip(self.critic.parameters(), self.z_critic):
-            eligibility_trace = self.options.gamma * \
-                self.options.critic_trace_decay * eligibility_trace + param.grad
-            param.grad = eligibility_trace * advantage
+    def update_critic(self, advantage, state):
+        self.critic_optimizer.zero_grad()
+        value = -self.critic(state)
+        value.backward()
+        for i, param in enumerate(self.critic.parameters()):
+            eligibility_trace = self.z_critic[i]
+            self.z_critic[i] = self.options.gamma * self.options.critic_trace_delay * \
+                eligibility_trace + param.grad
+            param.grad = self.z_critic[i] * advantage
 
         self.critic_optimizer.step()
-        self.critic_optimizer.zero_grad()
 
     def update_actor(self, advantage, prob, I):
-        loss = -torch.log(prob) * advantage
+        loss = -torch.log(prob)
 
         self.actor_optimizer.zero_grad()
         loss.backward()
 
-        for param, eligibility_trace in zip(self.actor.parameters(), self.z_actor):
-            eligibility_trace = self.options.gamma * \
-                self.options.actor_trace_decay * eligibility_trace + I * param.grad
-            param.grad = eligibility_trace * advantage
+        for i, param in enumerate(self.actor.parameters()):
+            eligibility_trace = self.z_actor[i]
+            self.z_actor[i] = self.options.gamma * \
+                self.actor_trace_delay * eligibility_trace + I * param.grad
+            param.grad = self.z_actor[i] * advantage
 
         self.actor_optimizer.step()
 
@@ -162,19 +166,21 @@ class A2CEgilibility(AbstractSolver):
             advantage = reward - estimate
             if (done):
                 self.update_actor(advantage, action_prob, I)
-                self.update_critic(advantage)
+                self.update_critic(advantage, torch.as_tensor(
+                    state, dtype=torch.float32))
                 break
             next_state_tensor = torch.as_tensor(
                 next_state, dtype=torch.float32)
             value = self.critic(next_state_tensor)
             advantage += (self.options.gamma * value)
             self.update_actor(advantage, action_prob, I)
-            self.update_critic(advantage)
+            self.update_critic(advantage, torch.as_tensor(
+                state, dtype=torch.float32))
             I *= self.options.gamma
             state = next_state
 
     def __str__(self):
-        return "A2CEligibility"
+        return "A2C"
 
     # def plot(self, stats, smoothing_window=20, final=False):
     #     plotting.plot_episode_stats(stats, smoothing_window, final=final)
