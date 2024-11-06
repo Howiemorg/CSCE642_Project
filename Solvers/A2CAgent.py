@@ -142,12 +142,6 @@ class A2CAgent(AbstractSolver):
 
         state, _ = self.env.reset()
         for _ in range(self.options.steps):
-            ################################
-            #   YOUR IMPLEMENTATION HERE   #
-            # Run update_actor_critic()    #
-            # only ONCE at EACH step in    #
-            # an episode.                  #
-            ################################
             action, action_prob, estimate = self.select_action(state)
             next_state, reward, done, _ = self.step(action)
             advantage = reward - estimate
@@ -177,9 +171,6 @@ class A2CAgent(AbstractSolver):
         Returns:
             The unreduced loss (as a tensor).
         """
-        ################################
-        #   YOUR IMPLEMENTATION HERE   #
-        # )
         return -advantage * torch.log(prob)
 
     def critic_loss(self, advantage, value):
@@ -193,13 +184,10 @@ class A2CAgent(AbstractSolver):
         Returns:
             The unreduced loss (as a tensor).
         """
-        ################################
-        #   YOUR IMPLEMENTATION HERE   #
-        ################################
         return -advantage * value
 
     def __str__(self):
-        return "A2C"
+        return "A2CAgent"
 
     # def plot(self, stats, smoothing_window=20, final=False):
     #     plotting.plot_episode_stats(stats, smoothing_window, final=final)

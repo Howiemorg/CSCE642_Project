@@ -73,13 +73,45 @@ def build_parser():
         "Input layer is connected to a layer of size 10 that is connected to a layer of size 15"
         " that is connected to the output",
     )
+    # parser.add_option(
+    #     "-a",
+    #     "--alpha",
+    #     dest="alpha",
+    #     type="float",
+    #     default=0.5,
+    #     help="The learning rate (alpha) for updating state/action values",
+    # )
     parser.add_option(
         "-a",
-        "--alpha",
-        dest="alpha",
+        "--actor_alpha",
+        dest="actor_alpha",
         type="float",
         default=0.5,
-        help="The learning rate (alpha) for updating state/action values",
+        help="The learning rate (alpha) for updating actor network parameters",
+    )
+    parser.add_option(
+        "-c",
+        "--critic_alpha",
+        dest="critic_alpha",
+        type="float",
+        default=0.5,
+        help="The learning rate (alpha) for updating critic network parameters",
+    )
+    parser.add_option(
+        "-A",
+        "--actor_trace_delay",
+        dest="actor_trace_delay",
+        type="float",
+        default=1.00,
+        help="The trace delay for actor eligibility traces",
+    )
+    parser.add_option(
+        "-A",
+        "--critic_trace_delay",
+        dest="critic_trace_delay",
+        type="float",
+        default=1.00,
+        help="The trace delay for critic eligibility traces",
     )
     parser.add_option(
         "-r",
