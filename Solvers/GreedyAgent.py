@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
-
+from torch.distributions import Normal
 from torch.optim import Adam
 
 from Solvers.Abstract_Solver import AbstractSolver
@@ -10,50 +10,116 @@ from Solvers.Abstract_Solver import AbstractSolver
 
 
 class ActorNetwork(nn.Module):
-    def __init__(self, obs_dim, act_dim, hidden_sizes):
+    def __init__(self, obs_dim, act_dim):
         super().__init__()
-        sizes = [obs_dim] + hidden_sizes + [act_dim]
-        self.layers = nn.ModuleList()
+         # RGB Image Branch (CNN)
+        self.conv1 = nn.Conv2d(3, 32, kernel_size=3, stride=1, padding=1)  # 3 for RGB channels
+        self.conv2 = nn.Conv2d(32, 64, kernel_size=3, stride=1, padding=1)
+        self.pool = nn.MaxPool2d(2, 2)  # Downsample by 2
+        
+        # Adjusted fully connected layers for 128x128 input images
+        # After two pool layers, input size 128x128 -> 64x64 with 64 channels
+        self.fc_cnn1 = nn.Linear(64 * 32 * 32, 512)
+        self.fc_cnn2 = nn.Linear(512, 256)
+        
+        # Fully Connected Branch for Position Record (e.g., Current and Past Position)
+        self.fc_position1 = nn.Linear(obs_dim, 128)
+        self.fc_position2 = nn.Linear(128, 64)
 
-        # Layers
-        for i in range(len(sizes) - 1):
-            self.layers.append(nn.Linear(sizes[i], sizes[i + 1]))
+        # Final layers for mean (mu) and standard deviation (std) of actions
+        self.fc_mu = nn.Linear(256 + 64, act_dim)
+        self.fc_log_std = nn.Linear(256 + 64, act_dim)
 
-    def forward(self, obs):
-        x = torch.cat([obs], dim=-1)
-        for i in range(len(self.layers) - 1):
-            x = F.relu(self.layers[i](x))
-        # Actor head
-        probs = F.softmax(self.layers[-1](x), dim=-1)
 
-        return torch.squeeze(probs, -1)
+    def forward(self, x):
+        x_image, x_position = x
+        print("Image shape:", x_image.shape)
+        print("Position shape:", x_position.shape)
+    
+        # Process RGB image
+        x_image = self.pool(F.relu(self.conv1(x_image)))
+        # print(x_image.shape)
+        x_image = self.pool(F.relu(self.conv2(x_image)))
+        # print(x_image.shape)
+        x_image = x_image.view(x_image.size(0), -1)  # Flatten for FC layer
+        # print(x_image.shape)
+        x_image = F.relu(self.fc_cnn1(x_image))     # Hidden layer 1 for CNN output
+        x_image = F.relu(self.fc_cnn2(x_image))     # Hidden layer 2 for CNN output
+        
+        # Process position history
+        x_position = F.relu(self.fc_position1(x_position))  # Hidden layer 1 for position
+        x_position = F.relu(self.fc_position2(x_position))  # Hidden layer 2 for position
+        
+        # Concatenate image features and position features
+        x_combined = torch.cat((x_image, x_position), dim=1)
+        
+        # Output mean (mu) and log_std for each action dimension
+        mu = self.fc_mu(x_combined)
+        log_std = self.fc_log_std(x_combined)
+
+        # Separate the last element of mu and apply ReLU to make it positive
+        mu_last_positive = F.relu(mu[:, -1:])
+        mu_rest = mu[:, :-1]
+        
+        # Concatenate back to form the final mu with the last element positive
+        mu = torch.cat((mu_rest, mu_last_positive), dim=1)
+        
+        # Apply softplus to log_std to ensure std is positive
+        std = torch.exp(log_std)  # or use softplus: F.softplus(log_std)
+        
+        return mu, std
 
 
 class CriticNetwork(nn.Module):
-    def __init__(self, obs_dim, hidden_sizes):
+    def __init__(self, obs_dim):
         super().__init__()
-        sizes = [obs_dim] + hidden_sizes + [1]
-        self.layers = nn.ModuleList()
+        
+        # RGB Image Branch (CNN)
+        self.conv1 = nn.Conv2d(3, 32, kernel_size=3, stride=1, padding=1)  # 3 for RGB channels
+        self.conv2 = nn.Conv2d(32, 64, kernel_size=3, stride=1, padding=1)
+        self.pool = nn.MaxPool2d(2, 2)  # Downsample by 2
 
-        # Layers
-        for i in range(len(sizes) - 1):
-            self.layers.append(nn.Linear(sizes[i], sizes[i + 1]))
 
-    def forward(self, obs):
-        x = torch.cat([obs], dim=-1)
-        for i in range(len(self.layers) - 1):
-            x = F.relu(self.layers[i](x))
-        # Critic head
-        value = self.layers[-1](x)
+        # Fully Connected Layers for CNN output
+        self.fc_cnn1 = nn.Linear(64 * 32 * 32, 512)
+        self.fc_cnn2 = nn.Linear(512, 256)
 
+        # Fully Connected Branch for Position Record (e.g., Current and Past Position)
+        self.fc_position1 = nn.Linear(obs_dim, 128)
+        self.fc_position2 = nn.Linear(128, 64)
+
+        # Final output layer to predict the value, combining CNN (256) and position (64) outputs
+        self.fc_value = nn.Linear(256 + 64, 1)
+
+
+    def forward(self, x):
+        x_image, x_position = x
+        # Process RGB image through CNN layers
+        x_image = self.pool(F.relu(self.conv1(x_image)))
+        x_image = self.pool(F.relu(self.conv2(x_image)))
+        x_image = x_image.view(x_image.size(0), -1)  # Flatten for FC layer
+        x_image = F.relu(self.fc_cnn1(x_image))       # Hidden layer 1 for CNN output
+        x_image = F.relu(self.fc_cnn2(x_image))       # Hidden layer 2 for CNN output
+
+        # Process position information through FC layers
+        x_position = F.relu(self.fc_position1(x_position))  # Hidden layer 1 for position
+        x_position = F.relu(self.fc_position2(x_position))  # Hidden layer 2 for position
+
+        # Concatenate image and position features
+        x_combined = torch.cat((x_image, x_position), dim=1)
+        
+        # Output the value prediction
+        value = self.fc_value(x_combined)
         return torch.squeeze(value, -1)
 
 class GreedyAgent(AbstractSolver):
     def __init__(self, env, eval_env, options):
         super().__init__(env, eval_env, options)
         # Create actor-critic network
+
+      
         self.actor = ActorNetwork(
-            env.observation_space.shape[0], env.action_space.n, self.options.layers
+            env.observation_space_shape, env.action_space.shape[0]#, self.options.layers
         )
         self.policy = self.create_greedy_policy()
 
@@ -61,7 +127,7 @@ class GreedyAgent(AbstractSolver):
             self.actor.parameters(), lr=self.options.alpha)
 
         self.critic = CriticNetwork(
-            env.observation_space.shape[0], self.options.layers
+            env.observation_space_shape#, self.options.layers
         )
 
         self.critic_optimizer = Adam(
@@ -78,10 +144,47 @@ class GreedyAgent(AbstractSolver):
         """
 
         def policy_fn(state):
-            state = torch.as_tensor(state, dtype=torch.float32)
-            return torch.argmax(self.actor(state)).detach().numpy()
+            state_tensor = self.preprocess_state(state)
+            return torch.argmax(self.actor(state_tensor)).detach().numpy()
 
         return policy_fn
+    
+    def preprocess_state(self,state, camera_resolution=(128, 128)):
+        """
+        Converts the Domain env observation state into a format compatible with the actrorNetwork.
+        
+        Args:
+            state (dict): A dictionary with "attitude", "rgba_cam", and "target_deltas" keys.
+            camera_resolution (tuple): Resolution of the camera image for resizing (default is 64x64).
+            
+        Returns:
+            x_image (torch.Tensor): Preprocessed image tensor for input into the CNN.
+            x_position (torch.Tensor): Flattened position data tensor for input into the FC layers.
+        """
+        # print(state)
+        # Process the image data (rgba_cam)
+        rgba_cam = state["rgba_cam"]
+        # Convert from uint8 [0, 255] to float [0, 1]
+        rgba_cam = rgba_cam.astype(np.float32) / 255.0
+        # Discard alpha channel, assuming RGBA format
+        rgb_cam = rgba_cam[:3, :, :]
+        # print(rgba_cam.shape)
+        # Ensure the image has the correct resolution
+        rgb_cam = torch.tensor(rgb_cam).view(1, 3, *camera_resolution)  # Batch size of 1
+
+        # Process the attitude data
+        attitude = state["attitude"]
+        attitude_tensor = torch.tensor(attitude, dtype=torch.float32).flatten()
+
+        # Process the target deltas
+        target_deltas = [torch.tensor(delta, dtype=torch.float32) for delta in state["target_deltas"]]
+        target_deltas_tensor = torch.cat(target_deltas)
+
+        # Concatenate attitude and target deltas into the position tensor
+        x_position = torch.cat([attitude_tensor, target_deltas_tensor], dim=0).unsqueeze(0)  # Batch size of 1
+
+        return rgb_cam, x_position
+
 
     def select_action(self, state):
         """
@@ -92,13 +195,21 @@ class GreedyAgent(AbstractSolver):
             The probability of the selected action (as a tensor)
             The critic's value estimate (as a tensor)
         """
-        state = torch.as_tensor(state, dtype=torch.float32)
-        probs = self.actor(state)
-        value = self.critic(state)
+        # print(state)
+        state_tensor = self.preprocess_state(state)
+        mus, stds = self.actor(state_tensor)
+        value = self.critic(state_tensor)
 
-        action = torch.argmax(probs).detach().numpy()
+        action = mus.detach().numpy()
 
-        return action, probs[action], value
+        # print(action)
+
+        # dist = Normal(mus, stds)
+        # action = dist.rsample()  # Reparameterized sampling
+        # log_prob = dist.log_prob(action).sum(dim=-1)  # Sum across action dimensions
+        # prob = log_prob.exp()  # Convert log prob to probability
+
+        return action, 1, value
 
     def update_actor_critic(self, advantage, prob, value):
         """
@@ -142,6 +253,7 @@ class GreedyAgent(AbstractSolver):
         state, _ = self.env.reset()
         for _ in range(self.options.steps):
             action, action_prob, estimate = self.select_action(state)
+            
             next_state, reward, done, _ = self.step(action)
             advantage = reward - estimate
             if (done):

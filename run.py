@@ -73,32 +73,32 @@ def build_parser():
         "Input layer is connected to a layer of size 10 that is connected to a layer of size 15"
         " that is connected to the output",
     )
-    # parser.add_option(
-    #     "-a",
-    #     "--alpha",
-    #     dest="alpha",
-    #     type="float",
-    #     default=0.5,
-    #     help="The learning rate (alpha) for updating state/action values",
-    # )
     parser.add_option(
         "-a",
-        "--actor_alpha",
-        dest="actor_alpha",
+        "--alpha",
+        dest="alpha",
         type="float",
         default=0.5,
-        help="The learning rate (alpha) for updating actor network parameters",
+        help="The learning rate (alpha) for updating state/action values",
     )
+    # parser.add_option(
+    #     "-a",
+    #     "--actor_alpha",
+    #     dest="actor_alpha",
+    #     type="float",
+    #     default=0.5,
+    #     help="The learning rate (alpha) for updating actor network parameters",
+    # )
+    # parser.add_option(
+    #     "-c",
+    #     "--critic_alpha",
+    #     dest="critic_alpha",
+    #     type="float",
+    #     default=0.5,
+    #     help="The learning rate (alpha) for updating critic network parameters",
+    # )
     parser.add_option(
-        "-c",
-        "--critic_alpha",
-        dest="critic_alpha",
-        type="float",
-        default=0.5,
-        help="The learning rate (alpha) for updating critic network parameters",
-    )
-    parser.add_option(
-        "-A",
+        # "-A",
         "--actor_trace_delay",
         dest="actor_trace_delay",
         type="float",
@@ -106,7 +106,7 @@ def build_parser():
         help="The trace delay for actor eligibility traces",
     )
     parser.add_option(
-        "-A",
+        # "-A",
         "--critic_trace_delay",
         dest="critic_trace_delay",
         type="float",
@@ -146,7 +146,7 @@ def build_parser():
         help="The final minimum value of epsilon after decaying is done",
     )
     parser.add_option(
-        "-c",
+        "-E",
         "--decay",
         dest="epsilon_decay",
         type="float",
@@ -192,6 +192,14 @@ def readCommand(argv):
     (options, args) = parser.parse_args(argv)
     return options
 
+def parse_list(string):
+    string.strip()
+    string = string[1:-1].split(",")  # Change "[0,1,2,3]" to '0', '1', '2', '3'
+    l = []
+    for n in string:
+        l.append(int(n))
+    return l
+
 
 def main(options):
     resultdir = "Results/"
@@ -211,24 +219,24 @@ def main(options):
     # env = getEnv(options.domain)
 
     # env = PyFlytGymEnv(options.domain)
-    env = dvs.get_domain_class(options.domain)
+    env = dvs.get_domain_class(options.domain)()# args to the domain go in the 2nd pair of parantheis
 
     env._max_episode_steps = options.steps + 1  # suppress truncation
 
     eval_env = dvs.get_domain_class(options.domain, render_mode="human")
-
+    print(env.duck_position)
     print(f"\n---------- {options.domain} ----------")
     print(f"Domain state space is {env.observation_space}")
     print(f"Domain action space is {env.action_space}")
     print("-" * (len(options.domain) + 22) + "\n")
-    # try:
-    #     options.layers = parse_list(options.layers)
-    # except ValueError:
-    #     raise Exception(
-    #         "layers argument doesnt follow int array conventions i.e., [<int>,<int>,<int>,...]"
-    #     )
-    # except:
-    #     pass
+    try:
+        options.layers = parse_list(options.layers)
+    except ValueError:
+        raise Exception(
+            "layers argument doesnt follow int array conventions i.e., [<int>,<int>,<int>,...]"
+        )
+    except:
+        pass
     solver = avs.get_solver_class(options.solver)(env, eval_env, options)
 
     # Keeps track of useful statistics

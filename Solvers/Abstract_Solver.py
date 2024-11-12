@@ -35,6 +35,7 @@ class AbstractSolver(ABC):
             done: Is next_state terminal
             info: Gym transition information
         """
+        print(action)
         next_state, reward, terminated, truncated, info = self.env.step(action)
 
         reward += self.calc_reward(next_state)
@@ -67,16 +68,15 @@ class AbstractSolver(ABC):
         """
         policy = self.create_greedy_policy()
         state, _ = self.eval_env.reset()
-        if self.options.domain == "FlappyBird-v0":
-            self.eval_env.render()
+
+
         rewards = 0
         steps = 0
         for _ in range(self.options.steps):
             action = policy(state)
             state, reward, done, _, _ = self.eval_env.step(action)
-            if self.options.domain == "FlappyBird-v0":
-                self.eval_env.render()
-                time.sleep(1 / 30)
+
+
             rewards += reward
             steps += 1
             if done:

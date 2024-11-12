@@ -10,17 +10,17 @@ domains = [
 
 def get_domain_class(name, render_mode=""):
     if name == domains[0]:
-        from Domains.Empty import Empty 
-        return Empty # should only be used for testing
+        from Domains.Empty import EmptyDomain 
+        return EmptyDomain # should only be used for testing
     elif name == domains[1]:
-        from Domains.SingleDuck import SingleDuck
-        return SingleDuck
+        from Domains.SingleDuck import SingleDuckDomain
+        return SingleDuckDomain
     elif name == domains[2]:
-        from Domains.City import City
-        return City
+        from Domains.City import CityDomain
+        return CityDomain
     elif name == domains[3]:
-        from Domains.WindyCity import WindyCity
-        return WindyCity
+        from Domains.WindyCity import WindyCityDomain
+        return WindyCityDomain
     else:
         assert False, "unknown domain name {}. domain must be from {}".format(
             name, str(domains)
