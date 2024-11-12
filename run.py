@@ -78,7 +78,7 @@ def build_parser():
         "--alpha",
         dest="alpha",
         type="float",
-        default=0.5,
+        default=1e-4,
         help="The learning rate (alpha) for updating state/action values",
     )
     # parser.add_option(

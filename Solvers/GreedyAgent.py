@@ -32,19 +32,19 @@ class ActorNetwork(nn.Module):
 
     def forward(self, x):
         x_image, x_position = x
-        print("Image shape:", x_image.shape)
-        print("Position shape:", x_position.shape)
+        # print("Image shape:", x_image.shape)
+        # print("Position shape:", x_position.shape)
     
         # Process RGB image
         x_image = self.pool(F.relu(self.conv1(x_image)))
-        print(x_image.shape)
+        # print(x_image.shape)
         x_image = self.pool(F.relu(self.conv2(x_image)))
-        print(x_image.shape)
+        # print(x_image.shape)
         x_image = x_image.view(x_image.size(0), -1)  # Flatten for FC layer
-        print(x_image.shape)
+        # print(x_image.shape)
         x_image = F.relu(self.fc_cnn1(x_image))     # Hidden layer 1 for CNN output
         x_image = F.relu(self.fc_cnn2(x_image))     # Hidden layer 2 for CNN output
-        print("after cnn hidden layers")
+        # print("after cnn hidden layers")
         # Process position history
         x_position = F.relu(self.fc_position1(x_position))  # Hidden layer 1 for position
         x_position = F.relu(self.fc_position2(x_position))  # Hidden layer 2 for position
@@ -172,11 +172,12 @@ class GreedyAgent(AbstractSolver):
         # Process the attitude data
         attitude = state["attitude"]
         attitude_tensor = torch.tensor(attitude, dtype=torch.float32).flatten()
+        # print("attitude", state["attitude"])
 
         # Process the target deltas
         target_deltas = [torch.tensor(delta, dtype=torch.float32) for delta in state["target_deltas"]]
         target_deltas_tensor = torch.cat(target_deltas)
-        # print(state["target_deltas"])
+        # print("target_deltas", state["target_deltas"])
         # print(state["target_deltas"].shape)
 
         # Concatenate attitude and target deltas into the position tensor
@@ -199,17 +200,21 @@ class GreedyAgent(AbstractSolver):
         mus, stds = self.actor(state_tensor)
         value = self.critic(state_tensor)
 
-        action = mus.detach().numpy()
+        greedy_action = mus.detach().numpy()
 
-        # print("ACTION:",action.squeeze(0))
+        # print("mus:",mus.squeeze(0))
+        # print("stds:",stds.squeeze(0))
         # print("ACTION SHAPE:", action.squeeze(0).shape)
 
-        # dist = Normal(mus, stds)
+        dist = Normal(mus, stds)
         # action = dist.rsample()  # Reparameterized sampling
         # log_prob = dist.log_prob(action).sum(dim=-1)  # Sum across action dimensions
         # prob = log_prob.exp()  # Convert log prob to probability
 
-        return action.squeeze(0), 1, value
+        prob_density = torch.exp(dist.log_prob(mus)).prod(dim=-1)
+        # print("prob:",prob_density)
+
+        return greedy_action.squeeze(0), prob_density, value
 
     def update_actor_critic(self, advantage, prob, value):
         """
@@ -252,7 +257,10 @@ class GreedyAgent(AbstractSolver):
 
         state, _ = self.env.reset()
         print("STATE RESET:", torch.tensor(state["rgba_cam"]).shape)
+        i =0
         for _ in range(self.options.steps):
+            # print(f"State {i}")
+            # i+=1
             action, action_prob, estimate = self.select_action(state)
             
             next_state, reward, done, _ = self.step(action)
@@ -260,11 +268,15 @@ class GreedyAgent(AbstractSolver):
             if (done):
                 self.update_actor_critic(advantage, action_prob, estimate)
                 break
-            next_state_tensor = torch.as_tensor(
-                next_state, dtype=torch.float32)
+            next_state_tensor = self.preprocess_state(next_state)
+            # next_state_tensor = torch.as_tensor(
+            #     next_state, dtype=torch.float32)
             value = self.critic(next_state_tensor)
+            # print(f"State value {value}")
             advantage += (self.options.gamma * value)
+            # print(f"State advantage {advantage}")
             self.update_actor_critic(advantage, action_prob, estimate)
+            # print(next_state)
             state = next_state
 
     def actor_loss(self, advantage, prob):

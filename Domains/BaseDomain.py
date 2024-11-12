@@ -172,3 +172,10 @@ class BaseDomain(QuadXWaypointsEnv):
         if self.waypoints.target_reached:
             self.reward += 200.0  # Example change to reward
             # Add any additional reward conditions specific to the duck, if needed
+   
+    def target_reached(self) -> bool:
+        """Checks if the targets has been reached."""
+        if self.waypoints.target_reached:
+            return True
+        else:
+            return False
