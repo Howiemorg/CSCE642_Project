@@ -12,23 +12,22 @@ from Solvers.Abstract_Solver import AbstractSolver
 class ActorNetwork(nn.Module):
     def __init__(self, obs_dim, act_dim):
         super().__init__()
-         # RGB Image Branch (CNN)
-        self.conv1 = nn.Conv2d(3, 32, kernel_size=3, stride=1, padding=1)  # 3 for RGB channels
-        self.conv2 = nn.Conv2d(32, 64, kernel_size=3, stride=1, padding=1)
-        self.pool = nn.MaxPool2d(2, 2)  # Downsample by 2
+
+        self.conv1 = nn.Conv2d(3, 32, kernel_size=3, stride=1, padding=1, dtype=torch.float32)
+        self.conv2 = nn.Conv2d(32, 64, kernel_size=3, stride=1, padding=1, dtype=torch.float32)
+        self.pool = nn.MaxPool2d(2, 2)
         
-        # Adjusted fully connected layers for 128x128 input images
-        # After two pool layers, input size 128x128 -> 64x64 with 64 channels
-        self.fc_cnn1 = nn.Linear(64 * 32 * 32, 512)
-        self.fc_cnn2 = nn.Linear(512, 256)
+        # Fully Connected Layers for CNN output
+        self.fc_cnn1 = nn.Linear(64 * 32 * 32, 512, dtype=torch.float32)
+        self.fc_cnn2 = nn.Linear(512, 256, dtype=torch.float32)
         
         # Fully Connected Branch for Position Record (e.g., Current and Past Position)
-        self.fc_position1 = nn.Linear(obs_dim, 128)
-        self.fc_position2 = nn.Linear(128, 64)
+        self.fc_position1 = nn.Linear(obs_dim, 128, dtype=torch.float32)
+        self.fc_position2 = nn.Linear(128, 64, dtype=torch.float32)
 
         # Final layers for mean (mu) and standard deviation (std) of actions
-        self.fc_mu = nn.Linear(256 + 64, act_dim)
-        self.fc_log_std = nn.Linear(256 + 64, act_dim)
+        self.fc_mu = nn.Linear(256 + 64, act_dim, dtype=torch.float32)
+        self.fc_log_std = nn.Linear(256 + 64, act_dim, dtype=torch.float32)
 
 
     def forward(self, x):
@@ -38,14 +37,14 @@ class ActorNetwork(nn.Module):
     
         # Process RGB image
         x_image = self.pool(F.relu(self.conv1(x_image)))
-        # print(x_image.shape)
+        print(x_image.shape)
         x_image = self.pool(F.relu(self.conv2(x_image)))
-        # print(x_image.shape)
+        print(x_image.shape)
         x_image = x_image.view(x_image.size(0), -1)  # Flatten for FC layer
-        # print(x_image.shape)
+        print(x_image.shape)
         x_image = F.relu(self.fc_cnn1(x_image))     # Hidden layer 1 for CNN output
         x_image = F.relu(self.fc_cnn2(x_image))     # Hidden layer 2 for CNN output
-        
+        print("after cnn hidden layers")
         # Process position history
         x_position = F.relu(self.fc_position1(x_position))  # Hidden layer 1 for position
         x_position = F.relu(self.fc_position2(x_position))  # Hidden layer 2 for position
@@ -75,22 +74,20 @@ class CriticNetwork(nn.Module):
         super().__init__()
         
         # RGB Image Branch (CNN)
-        self.conv1 = nn.Conv2d(3, 32, kernel_size=3, stride=1, padding=1)  # 3 for RGB channels
-        self.conv2 = nn.Conv2d(32, 64, kernel_size=3, stride=1, padding=1)
-        self.pool = nn.MaxPool2d(2, 2)  # Downsample by 2
-
-
+        self.conv1 = nn.Conv2d(3, 32, kernel_size=3, stride=1, padding=1, dtype=torch.float32)
+        self.conv2 = nn.Conv2d(32, 64, kernel_size=3, stride=1, padding=1, dtype=torch.float32)
+        self.pool = nn.MaxPool2d(2, 2)
+        
         # Fully Connected Layers for CNN output
-        self.fc_cnn1 = nn.Linear(64 * 32 * 32, 512)
-        self.fc_cnn2 = nn.Linear(512, 256)
-
+        self.fc_cnn1 = nn.Linear(64 * 32 * 32, 512, dtype=torch.float32)
+        self.fc_cnn2 = nn.Linear(512, 256, dtype=torch.float32)
+        
         # Fully Connected Branch for Position Record (e.g., Current and Past Position)
-        self.fc_position1 = nn.Linear(obs_dim, 128)
-        self.fc_position2 = nn.Linear(128, 64)
-
+        self.fc_position1 = nn.Linear(obs_dim, 128, dtype=torch.float32)
+        self.fc_position2 = nn.Linear(128, 64, dtype=torch.float32)
+        
         # Final output layer to predict the value, combining CNN (256) and position (64) outputs
-        self.fc_value = nn.Linear(256 + 64, 1)
-
+        self.fc_value = nn.Linear(256 + 64, 1, dtype=torch.float32)
 
     def forward(self, x):
         x_image, x_position = x
@@ -179,6 +176,8 @@ class GreedyAgent(AbstractSolver):
         # Process the target deltas
         target_deltas = [torch.tensor(delta, dtype=torch.float32) for delta in state["target_deltas"]]
         target_deltas_tensor = torch.cat(target_deltas)
+        # print(state["target_deltas"])
+        # print(state["target_deltas"].shape)
 
         # Concatenate attitude and target deltas into the position tensor
         x_position = torch.cat([attitude_tensor, target_deltas_tensor], dim=0).unsqueeze(0)  # Batch size of 1
