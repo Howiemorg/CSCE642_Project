@@ -201,14 +201,15 @@ class GreedyAgent(AbstractSolver):
 
         action = mus.detach().numpy()
 
-        # print(action)
+        # print("ACTION:",action.squeeze(0))
+        # print("ACTION SHAPE:", action.squeeze(0).shape)
 
         # dist = Normal(mus, stds)
         # action = dist.rsample()  # Reparameterized sampling
         # log_prob = dist.log_prob(action).sum(dim=-1)  # Sum across action dimensions
         # prob = log_prob.exp()  # Convert log prob to probability
 
-        return action, 1, value
+        return action.squeeze(0), 1, value
 
     def update_actor_critic(self, advantage, prob, value):
         """
@@ -250,6 +251,7 @@ class GreedyAgent(AbstractSolver):
         """
 
         state, _ = self.env.reset()
+        print("STATE RESET:", torch.tensor(state["rgba_cam"]).shape)
         for _ in range(self.options.steps):
             action, action_prob, estimate = self.select_action(state)
             

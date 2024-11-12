@@ -169,6 +169,6 @@ class BaseDomain(QuadXWaypointsEnv):
         super().compute_term_trunc_reward()
 
         # Modify the reward calculation here
-        if self.target_reached:
+        if self.waypoints.target_reached:
             self.reward += 200.0  # Example change to reward
             # Add any additional reward conditions specific to the duck, if needed

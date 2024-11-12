@@ -23,6 +23,7 @@ class EmptyDomain(BaseDomain):
         # Call the base class initializer
         super().__init__(**kwargs)
         self.duck_position = duck_position
+        self.name = "Empty"
 
         # self.load_duck() 
         # Add any other specific initialization you need here
