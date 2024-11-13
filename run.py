@@ -7,7 +7,7 @@ import random
 from Solvers.Abstract_Solver import AbstractSolver, Statistics
 import Solvers.Available_solvers as avs
 import Domains.Available_domains as dvs
-
+from utils import plotting
 import matplotlib.pyplot as plt
 
 
@@ -224,9 +224,8 @@ def main(options):
     env._max_episode_steps = options.steps + 1  # suppress truncation
 
     eval_env = dvs.get_domain_class(options.domain, render_mode="human")
-    print(env.duck_position)
     print(f"\n---------- {options.domain} ----------")
-    print(f"Domain state space is {env.observation_space}")
+    print(f"Domain state space is", ' '.join([f'{k.capitalize()} ({v})\n' for k,v in env.observation_space.items()]))
     print(f"Domain action space is {env.action_space}")
     print("-" * (len(options.domain) + 22) + "\n")
     try:
@@ -240,8 +239,8 @@ def main(options):
     solver = avs.get_solver_class(options.solver)(env, eval_env, options)
 
     # Keeps track of useful statistics
-    # stats = plotting.EpisodeStats(episode_lengths=[], episode_rewards=[])
-
+    stats = plotting.EpisodeStats(episode_lengths=[], episode_rewards=[])
+    # print("goals", env.waypoints.targets)
     plt.ion()
     # if not options.disable_plots:
     #     # Detects key press for rendering
@@ -262,22 +261,24 @@ def main(options):
             if options.epsilon > options.epsilon_end:
                 options.epsilon *= options.epsilon_decay
             # Update statistics
-            # stats.episode_rewards.append(solver.statistics[Statistics.Rewards.value])
-            # stats.episode_lengths.append(solver.statistics[Statistics.Steps.value])
-            # print(
-            #     f"Episode {i_episode+1}: Reward {solver.statistics[Statistics.Rewards.value]}, Steps {solver.statistics[Statistics.Steps.value]}"
-            # )
+            stats.episode_rewards.append(solver.statistics[Statistics.Rewards.value])
+            stats.episode_lengths.append(solver.statistics[Statistics.Steps.value])
+            print(
+                f"Episode {i_episode+1:4d}: Reward {solver.statistics[Statistics.Rewards.value]:.6f}, Steps {solver.statistics[Statistics.Steps.value]}"
+            )
+
+            if not options.disable_plots:
+                solver.plot(stats, int(0.1 * options.episodes), False)
 
 
     # if not options.disable_plots:
     #     solver.run_greedy()
     #     solver.plot(stats, int(0.1 * options.episodes), True)
-    #     if options.solver == "aql" and "MountainCar-v0" in str(env):
-    #         solver.plot_q_function()
-    #     solver.close()
-    # plt.ioff()
 
-    # return {"stats": stats, "solver": solver}
+    #     solver.close()
+    plt.ioff()
+
+    return {"stats": stats, "solver": solver}
 
 
 if __name__ == "__main__":

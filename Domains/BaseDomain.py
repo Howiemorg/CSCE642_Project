@@ -2,7 +2,7 @@ from PyFlyt.gym_envs.quadx_envs.quadx_waypoints_env import QuadXWaypointsEnv
 # from PyFlyt.models import race_gate
 from typing import Any, Literal
 import numpy as np
-import pybullet as p
+# import pybullet as p
 from gymnasium import spaces
 import os
 from PyFlyt.core import loadOBJ, obj_collision, obj_visual
@@ -67,6 +67,10 @@ class BaseDomain(QuadXWaypointsEnv):
         self.observation_space_shape = (self.observation_space["attitude"].shape[0] 
                                         # + (self.observation_space["rgba_cam"].shape[0]*self.observation_space["rgba_cam"].shape[1]*self.observation_space["rgba_cam"].shape[2]) #only a single frame
                                         + (self.num_targets*3)) # 3 is for 3-dimensions of the deltas
+        self.bounds = (self.action_space.low, self.action_space.high)
+
+        # print(self.bounds)
+       
         # print(self.observation_space_shape)
 
         # self.load_duck() 
@@ -170,6 +174,7 @@ class BaseDomain(QuadXWaypointsEnv):
 
         # Modify the reward calculation here
         if self.waypoints.target_reached:
+            print("FUICKS")
             self.reward += 200.0  # Example change to reward
             # Add any additional reward conditions specific to the duck, if needed
    

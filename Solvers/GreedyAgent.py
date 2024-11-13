@@ -10,7 +10,7 @@ from Solvers.Abstract_Solver import AbstractSolver
 
 
 class ActorNetwork(nn.Module):
-    def __init__(self, obs_dim, act_dim):
+    def __init__(self, obs_dim, act_dim, bounds):
         super().__init__()
 
         self.conv1 = nn.Conv2d(3, 32, kernel_size=3, stride=1, padding=1, dtype=torch.float32)
@@ -28,6 +28,11 @@ class ActorNetwork(nn.Module):
         # Final layers for mean (mu) and standard deviation (std) of actions
         self.fc_mu = nn.Linear(256 + 64, act_dim, dtype=torch.float32)
         self.fc_log_std = nn.Linear(256 + 64, act_dim, dtype=torch.float32)
+
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+        self.action_low = torch.tensor(bounds[0], dtype=torch.float32).to(device)
+        self.action_high = torch.tensor(bounds[1], dtype=torch.float32).to(device)
 
 
     def forward(self, x):
@@ -56,15 +61,22 @@ class ActorNetwork(nn.Module):
         mu = self.fc_mu(x_combined)
         log_std = self.fc_log_std(x_combined)
 
-        # Separate the last element of mu and apply ReLU to make it positive
-        mu_last_positive = F.relu(mu[:, -1:])
-        mu_rest = mu[:, :-1]
+        # # Separate the last element of mu and apply ReLU to make it positive
+        # mu_last_positive = F.relu(mu[:, -1:])
+        # mu_rest = mu[:, :-1]
         
-        # Concatenate back to form the final mu with the last element positive
-        mu = torch.cat((mu_rest, mu_last_positive), dim=1)
+        # # Concatenate back to form the final mu with the last element positive
+        # mu = torch.cat((mu_rest, mu_last_positive), dim=1)
         
         # Apply softplus to log_std to ensure std is positive
         std = torch.exp(log_std)  # or use softplus: F.softplus(log_std)
+
+        
+        # Squash the action values to the bounds of the action space
+        mu = self.action_low + 0.5 * (self.action_high - self.action_low) * (torch.tanh(mu) + 1)
+        std = self.action_low + 0.5 * (self.action_high - self.action_low) * (torch.tanh(std) + 1)
+        # std = torch.clamp(std, min=1e-6)
+        # return mu
         
         return mu, std
 
@@ -88,6 +100,9 @@ class CriticNetwork(nn.Module):
         
         # Final output layer to predict the value, combining CNN (256) and position (64) outputs
         self.fc_value = nn.Linear(256 + 64, 1, dtype=torch.float32)
+
+        # self.action_low = torch.tensor(bounds[0])
+        # self.action_high = torch.tensor(bounds[1])
 
     def forward(self, x):
         x_image, x_position = x
@@ -114,10 +129,10 @@ class GreedyAgent(AbstractSolver):
         super().__init__(env, eval_env, options)
         # Create actor-critic network
 
-      
+        self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
         self.actor = ActorNetwork(
-            env.observation_space_shape, env.action_space.shape[0]#, self.options.layers
-        )
+            env.observation_space_shape, env.action_space.shape[0], env.bounds#, self.options.layers
+        ).to(self.device)
         self.policy = self.create_greedy_policy()
 
         self.actor_optimizer = Adam(
@@ -125,7 +140,7 @@ class GreedyAgent(AbstractSolver):
 
         self.critic = CriticNetwork(
             env.observation_space_shape#, self.options.layers
-        )
+        ).to(self.device)
 
         self.critic_optimizer = Adam(
             self.critic.parameters(), lr=self.options.alpha)
@@ -183,7 +198,7 @@ class GreedyAgent(AbstractSolver):
         # Concatenate attitude and target deltas into the position tensor
         x_position = torch.cat([attitude_tensor, target_deltas_tensor], dim=0).unsqueeze(0)  # Batch size of 1
 
-        return rgb_cam, x_position
+        return rgb_cam.to(self.device), x_position.to(self.device)
 
 
     def select_action(self, state):
@@ -197,21 +212,27 @@ class GreedyAgent(AbstractSolver):
         """
         # print(state)
         state_tensor = self.preprocess_state(state)
+
         mus, stds = self.actor(state_tensor)
         value = self.critic(state_tensor)
 
-        greedy_action = mus.detach().numpy()
+        if torch.isnan(mus).all():
+            print("attitude", state["attitude"])
+            print("target_deltas", state["target_deltas"])
+            print("stds:",stds.cpu().squeeze(0))
+            print("mus:",greedy_action.squeeze(0))
+        greedy_action = mus.cpu().detach().numpy()
 
-        # print("mus:",mus.squeeze(0))
-        # print("stds:",stds.squeeze(0))
         # print("ACTION SHAPE:", action.squeeze(0).shape)
 
-        dist = Normal(mus, stds)
+        # dist = Normal(mus, stds)
         # action = dist.rsample()  # Reparameterized sampling
         # log_prob = dist.log_prob(action).sum(dim=-1)  # Sum across action dimensions
         # prob = log_prob.exp()  # Convert log prob to probability
 
-        prob_density = torch.exp(dist.log_prob(mus)).prod(dim=-1)
+
+        prob_density = torch.tensor([1.0]).to(self.device)
+        # prob_density = torch.exp(dist.log_prob(mus)).prod(dim=-1)
         # print("prob:",prob_density)
 
         return greedy_action.squeeze(0), prob_density, value
@@ -256,13 +277,13 @@ class GreedyAgent(AbstractSolver):
         """
 
         state, _ = self.env.reset()
-        print("STATE RESET:", torch.tensor(state["rgba_cam"]).shape)
-        i =0
+        # print("STATE RESET:", torch.tensor(state["rgba_cam"]).shape)
+        # i =0
         for _ in range(self.options.steps):
             # print(f"State {i}")
             # i+=1
             action, action_prob, estimate = self.select_action(state)
-            
+            print("action", action)
             next_state, reward, done, _ = self.step(action)
             advantage = reward - estimate
             if (done):
@@ -296,6 +317,7 @@ class GreedyAgent(AbstractSolver):
             The unreduced loss (as a tensor).
         """
         return -advantage * torch.log(prob)
+        # return -advantage * torch.log(prob)
 
     def critic_loss(self, advantage, value):
         """

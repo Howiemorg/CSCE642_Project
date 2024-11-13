@@ -10,6 +10,7 @@ from abc import ABC, abstractmethod
 from enum import Enum
 import gymnasium as gym
 import time
+from utils import plotting
 
 
 class AbstractSolver(ABC):
@@ -35,7 +36,7 @@ class AbstractSolver(ABC):
             done: Is next_state terminal
             info: Gym transition information
         """
-        print(action)
+        # print(action)
         next_state, reward, terminated, truncated, info = self.env.step(action)
 
         reward += self.calc_reward(next_state)
@@ -105,8 +106,8 @@ class AbstractSolver(ABC):
             ans += "," + s.name
         return ans
 
-    def plot(self, stats, smoothing_window=20, final=False):
-        pass
+    def plot(self, stats, smoothing_window, final=False):
+        plotting.plot_episode_stats(stats, smoothing_window, final=final)
 
     def get_stat(self):
         try:
