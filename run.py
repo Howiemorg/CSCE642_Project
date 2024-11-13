@@ -102,7 +102,7 @@ def build_parser():
         "--actor_trace_delay",
         dest="actor_trace_delay",
         type="float",
-        default=1.00,
+        default=.95,
         help="The trace delay for actor eligibility traces",
     )
     parser.add_option(
@@ -110,7 +110,7 @@ def build_parser():
         "--critic_trace_delay",
         dest="critic_trace_delay",
         type="float",
-        default=1.00,
+        default=.95,
         help="The trace delay for critic eligibility traces",
     )
     parser.add_option(

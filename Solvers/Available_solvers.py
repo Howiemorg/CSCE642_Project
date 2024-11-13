@@ -3,7 +3,7 @@
 solvers = [
     "random",
     "greedy",
-    "eplison_greedy",
+    "epsilon_greedy",
     "a2c",
     "a2c_elig"
 ]

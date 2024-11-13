@@ -231,12 +231,14 @@ class GreedyAgent(AbstractSolver):
         # log_prob = dist.log_prob(action).sum(dim=-1)  # Sum across action dimensions
         # prob = log_prob.exp()  # Convert log prob to probability
 
-        x_normal = Normal(mus[0], stds[0])
-        y_normal = Normal(mus[1], stds[1])
-        z_normal = Normal(mus[2], stds[2])
-        T_normal = Normal(mus[3], stds[3])
+        normal = Normal(mus, stds)
+        # x_normal = Normal(mus[0], stds[0])
+        # y_normal = Normal(mus[1], stds[1])
+        # z_normal = Normal(mus[2], stds[2])
+        # T_normal = Normal(mus[3], stds[3])
 
-        log_prob = x_normal.log_prob(mus[0]) + y_normal.log_prob(mus[1]) + z_normal.log_prob(mus[2]) + T_normal.log_prob(mus[3])
+        # log_prob = x_normal.log_prob(mus[0]) + y_normal.log_prob(mus[1]) + z_normal.log_prob(mus[2]) + T_normal.log_prob(mus[3])
+        log_prob = normal.log_prob(mus).sum()
         # probs = -(torch.pow((mus - mus), 2) / (2 * torch.pow(stds, 2))) - torch.log(stds) - .5 * torch.log(torch.tensor(2 * torch.pi))
         # print("Mus / std: ", -(torch.pow((mus - mus), 2) / (2 * torch.pow(stds, 2))))
         # print("Log of std:", - torch.log(stds))
