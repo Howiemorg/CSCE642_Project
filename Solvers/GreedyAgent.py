@@ -128,7 +128,7 @@ class GreedyAgent(AbstractSolver):
     def __init__(self, env, eval_env, options):
         super().__init__(env, eval_env, options)
         # Create actor-critic network
-
+        print("Action Space: ", env.action_space.shape)
         self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
         self.actor = ActorNetwork(
             env.observation_space_shape, env.action_space.shape[0], env.bounds#, self.options.layers
@@ -219,23 +219,32 @@ class GreedyAgent(AbstractSolver):
         if torch.isnan(mus).all():
             print("attitude", state["attitude"])
             print("target_deltas", state["target_deltas"])
-            print("stds:",stds.cpu().squeeze(0))
-            print("mus:",greedy_action.squeeze(0))
-        greedy_action = mus.cpu().detach().numpy()
+            print("stds:",stds.squeeze(0))
+            print("mus:",mus.squeeze(0))
+        mus = mus.squeeze(0)
+        stds = stds.squeeze(0)
 
-        # print("ACTION SHAPE:", action.squeeze(0).shape)
+        # print("ACTION SHAPE:", mus.shape)
 
         # dist = Normal(mus, stds)
         # action = dist.rsample()  # Reparameterized sampling
         # log_prob = dist.log_prob(action).sum(dim=-1)  # Sum across action dimensions
         # prob = log_prob.exp()  # Convert log prob to probability
 
+        x_normal = Normal(mus[0], stds[0])
+        y_normal = Normal(mus[1], stds[1])
+        z_normal = Normal(mus[2], stds[2])
+        T_normal = Normal(mus[3], stds[3])
 
-        prob_density = torch.tensor([1.0]).to(self.device)
+        log_prob = x_normal.log_prob(mus[0]) + y_normal.log_prob(mus[1]) + z_normal.log_prob(mus[2]) + T_normal.log_prob(mus[3])
+        # probs = -(torch.pow((mus - mus), 2) / (2 * torch.pow(stds, 2))) - torch.log(stds) - .5 * torch.log(torch.tensor(2 * torch.pi))
+        # print("Mus / std: ", -(torch.pow((mus - mus), 2) / (2 * torch.pow(stds, 2))))
+        # print("Log of std:", - torch.log(stds))
+        # print("Log of Pi:", - .5 * torch.log(torch.tensor(2 * torch.pi)))
         # prob_density = torch.exp(dist.log_prob(mus)).prod(dim=-1)
-        # print("prob:",prob_density)
+        # print("prob:",log_prob)
 
-        return greedy_action.squeeze(0), prob_density, value
+        return mus, log_prob, value
 
     def update_actor_critic(self, advantage, prob, value):
         """
@@ -247,7 +256,11 @@ class GreedyAgent(AbstractSolver):
             value: Critic's state value estimate (tensor).
         """
         # Compute loss
-        actor_loss = self.actor_loss(advantage.detach(), prob).mean()
+        # print("Before Loss Update")
+        # print("Advantage:", advantage)
+        # print("Prob:", prob)
+        actor_loss = self.actor_loss(advantage.detach(), prob)
+        # print("Actor Loss:", actor_loss)
         critic_loss = self.critic_loss(advantage.detach(), value).mean()
 
         self.actor_optimizer.zero_grad()
@@ -283,8 +296,8 @@ class GreedyAgent(AbstractSolver):
             # print(f"State {i}")
             # i+=1
             action, action_prob, estimate = self.select_action(state)
-            print("action", action)
-            next_state, reward, done, _ = self.step(action)
+            # print("action", action)
+            next_state, reward, done, _ = self.step(action.cpu().detach().numpy())
             advantage = reward - estimate
             if (done):
                 self.update_actor_critic(advantage, action_prob, estimate)
@@ -300,7 +313,7 @@ class GreedyAgent(AbstractSolver):
             # print(next_state)
             state = next_state
 
-    def actor_loss(self, advantage, prob):
+    def actor_loss(self, advantage, log_prob):
         """
         The policy gradient loss function.
         Note that you are required to define the Loss^PG
@@ -316,7 +329,7 @@ class GreedyAgent(AbstractSolver):
         Returns:
             The unreduced loss (as a tensor).
         """
-        return -advantage * torch.log(prob)
+        return -advantage * log_prob
         # return -advantage * torch.log(prob)
 
     def critic_loss(self, advantage, value):
