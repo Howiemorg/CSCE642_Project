@@ -223,7 +223,7 @@ class EpiGreedyAgent(AbstractSolver):
             print("stds:",stds.squeeze(0))
             print("mus:",mus.squeeze(0))
         mus = mus.squeeze(0)
-        stds = stds.squeeze(0)
+        stds = stds.squeeze(0) + 1e-8
 
         # print("ACTION SHAPE:", mus.shape)
 
