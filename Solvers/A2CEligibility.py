@@ -70,7 +70,7 @@ class ActorNetwork(nn.Module):
         # mu = torch.cat((mu_rest, mu_last_positive), dim=1)
         
         # Apply softplus to log_std to ensure std is positive
-        std = torch.exp(log_std)  # or use softplus: F.softplus(log_std)
+        std = F.softplus(log_std)  # or use softplus: F.softplus(log_std)
 
         
         # Squash the action values to the bounds of the action space
@@ -164,8 +164,11 @@ class A2CEligibility(AbstractSolver):
         """
 
         def policy_fn(state):
-            state = torch.as_tensor(state, dtype=torch.float32)
-            return torch.argmax(self.actor(state)).detach().numpy()
+            state_tensor = self.preprocess_state(state)
+
+            mus, _ = self.actor(state_tensor)
+            mus = mus.squeeze(0)
+            return mus.detach().cpu().numpy()
 
         return policy_fn
 
@@ -224,13 +227,13 @@ class A2CEligibility(AbstractSolver):
         mus, stds = self.actor(state_tensor)
         value = self.critic(state_tensor)
 
-        if torch.isnan(mus).all():
-            print("attitude", state["attitude"])
-            print("target_deltas", state["target_deltas"])
-            print("stds:",stds.squeeze(0))
-            print("mus:",mus.squeeze(0))
+        # if torch.isnan(mus).all():
+        #     print("attitude", state["attitude"])
+        #     print("target_deltas", state["target_deltas"])
+        #     print("stds:",stds.squeeze(0))
+        #     print("mus:",mus.squeeze(0))
         mus = mus.squeeze(0)
-        stds = stds.squeeze(0) + 1e-8
+        stds = stds.squeeze(0)
 
         # print("ACTION SHAPE:", mus.shape)
 

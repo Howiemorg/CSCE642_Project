@@ -157,7 +157,10 @@ class GreedyAgent(AbstractSolver):
 
         def policy_fn(state):
             state_tensor = self.preprocess_state(state)
-            return torch.argmax(self.actor(state_tensor)).detach().numpy()
+
+            mus, _ = self.actor(state_tensor)
+            mus = mus.squeeze(0)
+            return mus.detach().cpu().numpy()
 
         return policy_fn
     
@@ -216,11 +219,11 @@ class GreedyAgent(AbstractSolver):
         mus, stds = self.actor(state_tensor)
         value = self.critic(state_tensor)
 
-        if torch.isnan(mus).all():
-            print("attitude", state["attitude"])
-            print("target_deltas", state["target_deltas"])
-            print("stds:",stds.squeeze(0))
-            print("mus:",mus.squeeze(0))
+        # if torch.isnan(mus).all():
+        #     print("attitude", state["attitude"])
+        #     print("target_deltas", state["target_deltas"])
+        #     print("stds:",stds.squeeze(0))
+        #     print("mus:",mus.squeeze(0))
         mus = mus.squeeze(0)
         stds = stds.squeeze(0) + 1e-8
 

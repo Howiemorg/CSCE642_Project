@@ -155,7 +155,10 @@ class EpiGreedyAgent(AbstractSolver):
 
         def policy_fn(state):
             state_tensor = self.preprocess_state(state)
-            return torch.argmax(self.actor(state_tensor)).detach().numpy()
+
+            mus, _ = self.actor(state_tensor)
+            mus = mus.squeeze(0)
+            return mus.detach().cpu().numpy()
 
         return policy_fn
     
