@@ -68,7 +68,7 @@ class ActorNetwork(nn.Module):
         # mu = torch.cat((mu_rest, mu_last_positive), dim=1)
         
         # Apply softplus to log_std to ensure std is positive
-        std = torch.exp(log_std)  # or use softplus: F.softplus(log_std)
+        std = F.softplus(log_std) # or use softplus: F.softplus(log_std)
 
         
         # Squash the action values to the bounds of the action space
@@ -223,22 +223,9 @@ class A2CAgent(AbstractSolver):
             print("stds:",stds.squeeze(0))
             print("mus:",mus.squeeze(0))
         mus = mus.squeeze(0)
-        stds = stds.squeeze(0) + 1e-8
-
-        # print("ACTION SHAPE:", mus.shape)
-
-        # dist = Normal(mus, stds)
-        # action = dist.rsample()  # Reparameterized sampling
-        # log_prob = dist.log_prob(action).sum(dim=-1)  # Sum across action dimensions
-        # prob = log_prob.exp()  # Convert log prob to probability
+        stds = stds.squeeze(0)
 
         normal = Normal(mus, stds)
-        # y_normal = Normal(mus[1], stds[1])
-        # z_normal = Normal(mus[2], stds[2])
-        # T_normal = Normal(mus[3], stds[3])
-        # print("Mus:", mus)
-        # print("Logs: ", normal.log_prob(mus))
-
         sample = normal.sample()
         # print("SAMPLES:", sample)
         log_prob = normal.log_prob(sample).sum()

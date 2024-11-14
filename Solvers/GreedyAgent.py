@@ -69,7 +69,7 @@ class ActorNetwork(nn.Module):
         # mu = torch.cat((mu_rest, mu_last_positive), dim=1)
         
         # Apply softplus to log_std to ensure std is positive
-        std = torch.exp(log_std)  # or use softplus: F.softplus(log_std)
+        std = F.softplus(log_std) # or use softplus: F.softplus(log_std)
 
         
         # Squash the action values to the bounds of the action space
@@ -225,29 +225,12 @@ class GreedyAgent(AbstractSolver):
         #     print("stds:",stds.squeeze(0))
         #     print("mus:",mus.squeeze(0))
         mus = mus.squeeze(0)
-        stds = stds.squeeze(0) + 1e-8
-
-        # print("ACTION SHAPE:", mus.shape)
-
-        # dist = Normal(mus, stds)
-        # action = dist.rsample()  # Reparameterized sampling
-        # log_prob = dist.log_prob(action).sum(dim=-1)  # Sum across action dimensions
-        # prob = log_prob.exp()  # Convert log prob to probability
+        stds = stds.squeeze(0)
 
         normal = Normal(mus, stds)
-        # x_normal = Normal(mus[0], stds[0])
-        # y_normal = Normal(mus[1], stds[1])
-        # z_normal = Normal(mus[2], stds[2])
-        # T_normal = Normal(mus[3], stds[3])
 
         # log_prob = x_normal.log_prob(mus[0]) + y_normal.log_prob(mus[1]) + z_normal.log_prob(mus[2]) + T_normal.log_prob(mus[3])
         log_prob = normal.log_prob(mus).sum()
-        # probs = -(torch.pow((mus - mus), 2) / (2 * torch.pow(stds, 2))) - torch.log(stds) - .5 * torch.log(torch.tensor(2 * torch.pi))
-        # print("Mus / std: ", -(torch.pow((mus - mus), 2) / (2 * torch.pow(stds, 2))))
-        # print("Log of std:", - torch.log(stds))
-        # print("Log of Pi:", - .5 * torch.log(torch.tensor(2 * torch.pi)))
-        # prob_density = torch.exp(dist.log_prob(mus)).prod(dim=-1)
-        # print("prob:",log_prob)
 
         return mus, log_prob, value
 
