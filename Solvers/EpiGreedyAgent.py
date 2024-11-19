@@ -69,7 +69,7 @@ class ActorNetwork(nn.Module):
         # mu = torch.cat((mu_rest, mu_last_positive), dim=1)
         
         # Apply softplus to log_std to ensure std is positive
-        std = torch.exp(log_std)  # or use softplus: F.softplus(log_std)
+        std = F.softplus(log_std)  # or use softplus: F.softplus(log_std)
 
         
         # Squash the action values to the bounds of the action space
@@ -155,7 +155,10 @@ class EpiGreedyAgent(AbstractSolver):
 
         def policy_fn(state):
             state_tensor = self.preprocess_state(state)
-            return torch.argmax(self.actor(state_tensor)).detach().numpy()
+
+            mus, _ = self.actor(state_tensor)
+            mus = mus.squeeze(0)
+            return mus.detach().cpu().numpy()
 
         return policy_fn
     
