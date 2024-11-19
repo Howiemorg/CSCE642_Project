@@ -120,4 +120,4 @@ def plot_episode_stats(stats, smoothing_window=20, final=False):
         # plt.pause(5)
         plt.show(block=True)
     else:
-        plt.pause(1)
+        plt.pause(0.1)

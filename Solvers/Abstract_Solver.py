@@ -69,15 +69,16 @@ class AbstractSolver(ABC):
         """
         policy = self.create_greedy_policy()
         state, _ = self.eval_env.reset()
-
-
+        # if self.options.domain == "FlappyBird-v0":
+        #     self.eval_env.render()
         rewards = 0
         steps = 0
         for _ in range(self.options.steps):
             action = policy(state)
             state, reward, done, _, _ = self.eval_env.step(action)
-
-
+            # if self.options.domain == "FlappyBird-v0":
+            #     self.eval_env.render()
+            #     time.sleep(1 / 30)
             rewards += reward
             steps += 1
             if done:
@@ -106,7 +107,7 @@ class AbstractSolver(ABC):
             ans += "," + s.name
         return ans
 
-    def plot(self, stats, smoothing_window, final=False):
+    def plot(self, stats, smoothing_window=20, final=False):
         plotting.plot_episode_stats(stats, smoothing_window, final=final)
 
     def get_stat(self):

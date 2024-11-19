@@ -68,7 +68,7 @@ def build_parser():
         "--layers",
         dest="layers",
         type="string",
-        default="[24,24]",
+        default="[128,64]",
         help='size of hidden layers in a Deep neural net. e.g., "[10,15]" creates a net where the'
         "Input layer is connected to a layer of size 10 that is connected to a layer of size 15"
         " that is connected to the output",
@@ -81,22 +81,22 @@ def build_parser():
         default=1e-4,
         help="The learning rate (alpha) for updating state/action values",
     )
-    # parser.add_option(
-    #     "-a",
-    #     "--actor_alpha",
-    #     dest="actor_alpha",
-    #     type="float",
-    #     default=0.5,
-    #     help="The learning rate (alpha) for updating actor network parameters",
-    # )
-    # parser.add_option(
-    #     "-c",
-    #     "--critic_alpha",
-    #     dest="critic_alpha",
-    #     type="float",
-    #     default=0.5,
-    #     help="The learning rate (alpha) for updating critic network parameters",
-    # )
+    parser.add_option(
+        "-j",
+        "--actor_alpha",
+        dest="actor_alpha",
+        type="float",
+        default=3e-4,
+        help="The learning rate (alpha) for updating actor network parameters",
+    )
+    parser.add_option(
+        "-k",
+        "--critic_alpha",
+        dest="critic_alpha",
+        type="float",
+        default=3e-4,
+        help="The learning rate (alpha) for updating critic network parameters",
+    )
     parser.add_option(
         # "-A",
         "--actor_trace_delay",
@@ -158,7 +158,7 @@ def build_parser():
         "--replay",
         type="int",
         dest="replay_memory_size",
-        default=500000,
+        default=4,
         help="Size of the replay memory",
     )
     # parser.add_option(
@@ -223,7 +223,7 @@ def main(options):
 
     env._max_episode_steps = options.steps + 1  # suppress truncation
 
-    eval_env = dvs.get_domain_class(options.domain, render_mode="human")
+    eval_env = dvs.get_domain_class(options.domain)(render_mode="human")
     print(f"\n---------- {options.domain} ----------")
     print(f"Domain state space is", ' '.join([f'{k.capitalize()} ({v})\n' for k,v in env.observation_space.items()]))
     print(f"Domain action space is {env.action_space}")
@@ -270,12 +270,19 @@ def main(options):
             if not options.disable_plots:
                 solver.plot(stats, int(0.1 * options.episodes), False)
 
+        solver.export_weights()
 
-    # if not options.disable_plots:
-    #     solver.run_greedy()
-    #     solver.plot(stats, int(0.1 * options.episodes), True)
 
-    #     solver.close()
+    if not options.disable_plots:
+        try:
+            solver.load_weights()
+        except FileNotFoundError:
+            print("Weights not found, starting with no weights")
+        
+        solver.run_greedy()
+        solver.plot(stats, int(0.1 * options.episodes), True)
+
+        solver.close()
     plt.ioff()
 
     return {"stats": stats, "solver": solver}

@@ -3,6 +3,7 @@ from PyFlyt.gym_envs.quadx_envs.quadx_waypoints_env import QuadXWaypointsEnv
 from typing import Any, Literal
 import numpy as np
 # import pybullet as p
+import math
 from gymnasium import spaces
 import os
 from PyFlyt.core import loadOBJ, obj_collision, obj_visual
@@ -39,6 +40,8 @@ class BaseDomain(QuadXWaypointsEnv):
         duck_position: tuple[float, float, float] = (1.0, 1.0, 0.5),
         camera_resolution: tuple[int, int] = (128, 128),
         num_targets: int = 1,
+        max_duration_seconds: int =30,
+        # render_resolution: tuple[int, int] = (1280, 720),
         **kwargs
     ):
     
@@ -50,6 +53,8 @@ class BaseDomain(QuadXWaypointsEnv):
         """
         # Call the base class initializer
         kwargs["num_targets"]=num_targets
+        kwargs["max_duration_seconds"]=max_duration_seconds
+        # kwargs["render_resolution"]=render_resolution
         super().__init__(**kwargs)
         
         self.camera_resolution = camera_resolution
@@ -64,9 +69,9 @@ class BaseDomain(QuadXWaypointsEnv):
 
         # print(self.observation_space["attitude"].shape[0])
         # print(self.observation_space["target_deltas"])
-        self.observation_space_shape = (self.observation_space["attitude"].shape[0] 
+        self.observation_space_shape = (self.observation_space["attitude"].shape[0]-11)
                                         # + (self.observation_space["rgba_cam"].shape[0]*self.observation_space["rgba_cam"].shape[1]*self.observation_space["rgba_cam"].shape[2]) #only a single frame
-                                        + (self.num_targets*3)) # 3 is for 3-dimensions of the deltas
+                                        # + (self.num_targets*3)) # 3 is for 3-dimensions of the deltas
         self.bounds = (self.action_space.low, self.action_space.high)
 
         # print(self.bounds)
@@ -171,11 +176,33 @@ class BaseDomain(QuadXWaypointsEnv):
         """Compute termination, truncation, and modified reward function."""
         # Call the base class version if you want to use it as a starting point
         super().compute_term_trunc_reward()
+        # action_smoothness = max(-5,np.linalg.norm(self.state["attitude"][:3]- self.state["attitude"][-8:-5]))
+        
+        # # if(self.step_count>20):
+        # #     self.reward +=  max(0.1*self.step_count, 0.5)
+        # if abs(self.state["target_deltas"][0][0]) > 0.2:
+        #     self.reward -=0.01*math.log(abs(self.state["target_deltas"][0][0])+1) 
+        # if abs(self.state["target_deltas"][0][1]) > 0.2:
+        #     self.reward -=0.01 *math.log(abs(self.state["target_deltas"][0][1])+1) 
+        # if abs(self.state["target_deltas"][0][2]) > 0.2:
+        #     self.reward -=0.01 *math.log(abs(self.state["target_deltas"][0][2])+1) 
+
+        # self.reward += action_smoothness 
+        self.reward +=  -0.5*np.sum(np.abs(self.state["target_deltas"][0]))*self.state["attitude"][3] 
+
+        # if self.info["collision"]:
+        #     self.reward -= np.sum(np.abs(self.state["target_deltas"]))*self.state["attitude"][1]
+        # #     # print("Ouch")
+        # if self.info["out_of_bounds"]:
+        #     self.reward -= np.sum(np.abs(self.state["target_deltas"]))*self.state["attitude"][1]
+        #     self.reward -= np.linalg.norm(self.state["target_deltas"])*self.state["attitude"][1]
+        # #     self.reward = -150.0
+            # print("OOb")
 
         # Modify the reward calculation here
         if self.waypoints.target_reached:
             print("FUICKS")
-            self.reward += 200.0  # Example change to reward
+            # self.reward += 200.0  # Example change to reward
             # Add any additional reward conditions specific to the duck, if needed
    
     def target_reached(self) -> bool:
