@@ -154,9 +154,7 @@ class ActorNetwork(nn.Module):
 class CriticNetwork(nn.Module):
     def __init__(self, obs_dim, hidden_size, replay_size):
         super().__init__()
-
-        
-        
+              
         # RGB Image Branch (CNN)
         self.conv1 = nn.Conv2d(3, 32, kernel_size=3, stride=1, padding=1, dtype=torch.float32)
         self.conv2 = nn.Conv2d(32, 64, kernel_size=3, stride=1, padding=1, dtype=torch.float32)
@@ -252,6 +250,8 @@ class A2CAgent(AbstractSolver):
             self.critic.parameters(), lr=self.options.critic_alpha) 
         
         print((env.observation_space_shape, 3))
+
+        self.env = env
 
     def create_greedy_policy(self):
         """

@@ -69,7 +69,7 @@ class BaseDomain(QuadXWaypointsEnv):
 
         # print(self.observation_space["attitude"].shape[0])
         # print(self.observation_space["target_deltas"])
-        self.observation_space_shape = (self.observation_space["attitude"].shape[0]-11)
+        self.observation_space_shape = (self.observation_space["attitude"].shape[0])#-11
                                         # + (self.observation_space["rgba_cam"].shape[0]*self.observation_space["rgba_cam"].shape[1]*self.observation_space["rgba_cam"].shape[2]) #only a single frame
                                         # + (self.num_targets*3)) # 3 is for 3-dimensions of the deltas
         self.bounds = (self.action_space.low, self.action_space.high)
@@ -190,14 +190,14 @@ class BaseDomain(QuadXWaypointsEnv):
         # self.reward += action_smoothness 
         self.reward +=  -0.5*np.sum(np.abs(self.state["target_deltas"][0]))*self.state["attitude"][3] 
 
-        # if self.info["collision"]:
-        #     self.reward -= np.sum(np.abs(self.state["target_deltas"]))*self.state["attitude"][1]
-        # #     # print("Ouch")
-        # if self.info["out_of_bounds"]:
-        #     self.reward -= np.sum(np.abs(self.state["target_deltas"]))*self.state["attitude"][1]
-        #     self.reward -= np.linalg.norm(self.state["target_deltas"])*self.state["attitude"][1]
-        # #     self.reward = -150.0
-            # print("OOb")
+        if self.info["collision"]:
+            self.reward -= np.sum(np.abs(self.state["target_deltas"]))*self.state["attitude"][1]
+        #     # print("Ouch")
+        if self.info["out_of_bounds"]:
+            self.reward -= np.sum(np.abs(self.state["target_deltas"]))*self.state["attitude"][1]
+            self.reward -= np.linalg.norm(self.state["target_deltas"])*self.state["attitude"][1]
+        #     self.reward = -150.0
+            print("OOb")
 
         # Modify the reward calculation here
         if self.waypoints.target_reached:

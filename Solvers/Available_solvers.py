@@ -5,7 +5,9 @@ solvers = [
     "greedy",
     "epsilon_greedy",
     "a2c",
-    "a2c_elig"
+    "a2c_elig",
+    "ddpg",
+    "my_ddpg"
 ]
 
 
@@ -25,6 +27,12 @@ def get_solver_class(name):
     elif name == solvers[4]:
         from Solvers.A2CEligibility import A2CEligibility
         return A2CEligibility
+    elif name == solvers[5]:
+        from Solvers.DDPG import DDPG
+        return DDPG
+    elif name == solvers[6]:
+        from Solvers.MyDDPG import MyDDPG
+        return MyDDPG
     else:
         assert False, "unknown solver name {}. solver must be from {}".format(
             name, str(solvers)
