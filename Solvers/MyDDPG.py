@@ -13,6 +13,8 @@ from torch.distributions.normal import Normal
 from Solvers.Abstract_Solver import AbstractSolver
 # from lib import plotting
 
+def cuda_tensor_to_numpy(tensor):
+    return tensor.cpu().detach().numpy()
 
 class QNetwork(nn.Module):
     def __init__(self, obs_dim, act_dim, hidden_sizes):
@@ -30,8 +32,13 @@ class QNetwork(nn.Module):
         for i in range(len(sizes) - 1):
             self.layers.append(nn.Linear(sizes[i], sizes[i + 1]))
 
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
     def forward(self, obs, act):
         x_image, x_position, x_deltas  = obs
+        x_image = x_image.to(self.device)
+        x_position = x_position.to(self.device)
+        x_deltas = x_deltas.to(self.device)
         # Process RGB image through CNN layers
         x_image = self.pool(F.relu(self.conv1(x_image)))
         x_image = self.pool(F.relu(self.conv2(x_image)))
@@ -46,7 +53,7 @@ class QNetwork(nn.Module):
 
 
 class PolicyNetwork(nn.Module):
-    def __init__(self, obs_dim, act_dim, act_lim, hidden_sizes):
+    def __init__(self, obs_dim, act_dim, bounds, hidden_sizes):
         super().__init__()
         self.conv1 = nn.Conv2d(3, 32, kernel_size=3, stride=1, padding=1, dtype=torch.float32)
         self.conv2 = nn.Conv2d(32, 64, kernel_size=3, stride=1, padding=1, dtype=torch.float32)
@@ -57,13 +64,21 @@ class PolicyNetwork(nn.Module):
         self.fc_cnn2 = nn.Linear(512, hidden_sizes[1], dtype=torch.float32)
 
         sizes = [obs_dim + hidden_sizes[1] + 3] + hidden_sizes + [act_dim]
-        self.act_lim = act_lim
+        
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        
+        self.action_low = torch.tensor(bounds[0], dtype=torch.float32).to(self.device)
+        self.action_high = torch.tensor(bounds[1], dtype=torch.float32).to(self.device)
+
         self.layers = nn.ModuleList()
         for i in range(len(sizes) - 1):
             self.layers.append(nn.Linear(sizes[i], sizes[i + 1]))
 
     def forward(self, obs):
         x_image, x_position, x_deltas  = obs
+        x_image = x_image.to(self.device)
+        x_position = x_position.to(self.device)
+        x_deltas = x_deltas.to(self.device)
         # Process RGB image through CNN layers
         x_image = self.pool(F.relu(self.conv1(x_image)))
         x_image = self.pool(F.relu(self.conv2(x_image)))
@@ -172,18 +187,12 @@ class MyDDPG(AbstractSolver):
         target_deltas = [torch.tensor(delta, dtype=torch.float32) for delta in state["target_deltas"]]
         target_deltas_tensor = torch.cat(target_deltas, dim=0).unsqueeze(0)
         # print("target_deltas", state["target_deltas"])
-        # print(state["target_deltas"].shape)
-
-        self.actionBuf.add(attitude_tensor, target_deltas_tensor.squeeze(0))
-    
-        # Get flattened replay memory tensor
-        x_memory = self.actionBuf.get_memory_tensor().unsqueeze(0)
-    
+        # print(state["target_deltas"].shape)  
 
         # Concatenate attitude and target deltas into the position tensor
         x_position = torch.cat([attitude_tensor], dim=0).unsqueeze(0)  # Batch size of 1
 
-        return rgb_cam.to(self.device), x_position.to(self.device), target_deltas_tensor.to(self.device), x_memory.to(self.device)
+        return rgb_cam.to(self.device), x_position.to(self.device), target_deltas_tensor.to(self.device)
 
 
     @torch.no_grad()
@@ -194,19 +203,19 @@ class MyDDPG(AbstractSolver):
          Returns:
             The selected action (as an int)
         """
-        state = torch.as_tensor(state, dtype=torch.float32)
-        mu = self.actor_critic.pi(state)
+        mu = self.actor_critic.pi(state).squeeze(0)
         m = Normal(
             torch.zeros(self.env.action_space.shape[0]),
             torch.ones(self.env.action_space.shape[0]),
         )
         noise_scale = 0.1
-        action_limit = self.env.action_space.high[0]
-        action = mu + noise_scale * m.sample()
+        action_low_limit = torch.tensor(self.env.bounds[0])
+        action_high_limit = torch.tensor(self.env.bounds[1])
+        action = mu.cpu() + noise_scale * m.sample()
         return torch.clip(
             action,
-            -action_limit,
-            action_limit,
+            action_low_limit,
+            action_high_limit,
         ).numpy()
 
     @torch.no_grad()
@@ -226,7 +235,7 @@ class MyDDPG(AbstractSolver):
         #   YOUR IMPLEMENTATION HERE   #
         ################################
         policy_actions = self.target_actor_critic.pi(next_states)
-        q_values = self.target_actor_critic.q(next_states, policy_actions)
+        q_values = self.target_actor_critic.q(next_states, policy_actions).cpu()
         return rewards + ~dones.bool() * q_values * self.options.gamma
 
 
@@ -235,6 +244,7 @@ class MyDDPG(AbstractSolver):
         Samples transitions from the replay memory and updates actor_critic network.
         """
         if len(self.replay_memory) > self.options.batch_size:
+            # print("Replay")
             minibatch = random.sample(self.replay_memory, self.options.batch_size)
             minibatch = [
                 np.array(
@@ -243,38 +253,50 @@ class MyDDPG(AbstractSolver):
                         for transition, idx in zip(minibatch, [i] * len(minibatch))
                     ]
                 )
-                for i in range(5)
+                for i in range(9)
             ]
-            states, actions, rewards, next_states, dones = minibatch
+            state_images, state_attitudes, state_deltas, actions, rewards, next_state_images, next_state_attitudes, next_state_deltas, dones = minibatch
+            # print(state_images.shape)
+            # print(state_attitudes.shape)
+            # print(state_deltas.shape)
             # Convert numpy arrays to torch tensors
-            states = torch.as_tensor(states, dtype=torch.float32)
-            actions = torch.as_tensor(actions, dtype=torch.float32)
+            state_images = torch.as_tensor(state_images, dtype=torch.float32, device=self.device)
+            state_attitudes = torch.as_tensor(state_attitudes, dtype=torch.float32, device=self.device)
+            state_deltas = torch.as_tensor(state_deltas, dtype=torch.float32, device=self.device)
+            actions = torch.as_tensor(actions, dtype=torch.float32, device=self.device)
             rewards = torch.as_tensor(rewards, dtype=torch.float32)
-            next_states = torch.as_tensor(next_states, dtype=torch.float32)
+            next_state_images = torch.as_tensor(next_state_images, dtype=torch.float32, device=self.device)
+            next_state_attitudes = torch.as_tensor(next_state_attitudes, dtype=torch.float32, device=self.device)
+            next_state_deltas = torch.as_tensor(next_state_deltas, dtype=torch.float32, device=self.device)
             dones = torch.as_tensor(dones, dtype=torch.float32)
 
             # Current Q-values
-            current_q = self.actor_critic.q(states, actions)
+            current_q = self.actor_critic.q((state_images, state_attitudes, state_deltas), actions)
             # Target Q-values
-            target_q = self.compute_target_values(next_states, rewards, dones)
+            target_q = self.compute_target_values((next_state_images, next_state_attitudes, next_state_deltas), rewards, dones)
 
             # Optimize critic network
-            loss_q = self.q_loss(current_q, target_q).mean()
+            loss_q = self.q_loss(current_q.cpu(), target_q)
             self.optimizer_q.zero_grad()
             loss_q.backward()
             self.optimizer_q.step()
 
             # Optimize actor network
-            loss_pi = self.pi_loss(states).mean()
+            loss_pi = self.pi_loss((state_images, state_attitudes, state_deltas)).mean()
             self.optimizer_pi.zero_grad()
             loss_pi.backward()
             self.optimizer_pi.step()
+
+            # print(f"Critic Loss: {loss_q.item()}, Actor Loss: {loss_pi.item()}")
+
 
     def memorize(self, state, action, reward, next_state, done):
         """
         Adds transitions to the replay buffer.
         """
-        self.replay_memory.append((state, action, reward, next_state, done))
+        state = [cuda_tensor_to_numpy(tensor).squeeze(0) for tensor in state]
+        next_state = [cuda_tensor_to_numpy(tensor).squeeze(0) for tensor in next_state]
+        self.replay_memory.append((state[0], state[1], state[2], action, reward, next_state[0], next_state[1], next_state[2], done))
 
     def train_episode(self):
         """
@@ -290,12 +312,14 @@ class MyDDPG(AbstractSolver):
         """
 
         state, _ = self.env.reset()
+        state = self.preprocess_state(state)
         for _ in range(self.options.steps):
             ################################
             #   YOUR IMPLEMENTATION HERE   #
             ################################
             action = self.select_action(state)
             next_state, reward, done, _ = self.step(action)
+            next_state = self.preprocess_state(next_state)
             self.memorize(state, action, reward, next_state, done)
             self.replay()
             if len(self.replay_memory) > self.options.batch_size:
@@ -321,7 +345,7 @@ class MyDDPG(AbstractSolver):
         # print("CURRENT:",current_q)
         # print("TARGET:",target_q)
         # print("SUB:",current_q - target_q)
-        q_loss = (current_q - target_q) ** 2
+        q_loss =  nn.MSELoss()(current_q, target_q)
         # print(q_loss)
         return q_loss
 

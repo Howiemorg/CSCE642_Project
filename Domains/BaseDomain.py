@@ -190,19 +190,19 @@ class BaseDomain(QuadXWaypointsEnv):
         # self.reward += action_smoothness 
         self.reward +=  -0.5*np.sum(np.abs(self.state["target_deltas"][0]))*self.state["attitude"][3] 
 
-        if self.info["collision"]:
-            self.reward -= np.sum(np.abs(self.state["target_deltas"]))*self.state["attitude"][1]
+        # if self.info["collision"]:
+        #     self.reward -= np.sum(np.abs(self.state["target_deltas"]))*self.state["attitude"][1]
         #     # print("Ouch")
-        if self.info["out_of_bounds"]:
-            self.reward -= np.sum(np.abs(self.state["target_deltas"]))*self.state["attitude"][1]
-            self.reward -= np.linalg.norm(self.state["target_deltas"])*self.state["attitude"][1]
-        #     self.reward = -150.0
-            print("OOb")
+        # if self.info["out_of_bounds"]:
+        #     self.reward -= np.sum(np.abs(self.state["target_deltas"]))*self.state["attitude"][1]
+        #     self.reward -= np.linalg.norm(self.state["target_deltas"])*self.state["attitude"][1]
+        #     # self.reward = -150.0
+        #     print("OOb")
 
         # Modify the reward calculation here
         if self.waypoints.target_reached:
             print("FUICKS")
-            # self.reward += 200.0  # Example change to reward
+            self.reward += 200.0  # Example change to reward
             # Add any additional reward conditions specific to the duck, if needed
    
     def target_reached(self) -> bool:
