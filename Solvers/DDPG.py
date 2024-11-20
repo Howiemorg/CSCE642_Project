@@ -303,8 +303,8 @@ class DDPG(AbstractSolver):
 
         @torch.no_grad()
         def policy_fn(state):
-            state = torch.as_tensor(state, dtype=torch.float32)
-            return self.actor_critic.pi(state).numpy()
+            state = self.preprocess_state(state)
+            return self.actor_critic.pi(state).squeeze(0).cpu().numpy()
 
         return policy_fn
     
