@@ -1,4 +1,4 @@
-import random
+import random, os
 from copy import deepcopy
 from collections import deque
 
@@ -150,10 +150,50 @@ class MyDDPG(AbstractSolver):
 
         @torch.no_grad()
         def policy_fn(state):
-            state = torch.as_tensor(state, dtype=torch.float32)
-            return self.actor_critic.pi(state).numpy()
+            state = self.preprocess_state(state)
+            return self.actor_critic.pi(state).squeeze(0).cpu().numpy()
 
         return policy_fn
+    
+    def export_weights(self, prefix="642_"):
+        weights_dir = os.path.join(
+            os.path.dirname(os.path.realpath(__file__)),
+            "../Weights/"
+        )
+        actor_dir =  os.path.join(
+            weights_dir,
+            prefix+"actor_network_weights.pth"
+        )
+        critic_dir =  os.path.join(
+            weights_dir,
+            prefix+"critic_network_weights.pth"
+        )
+        os.makedirs(weights_dir, exist_ok=True)
+        torch.save(self.actor_critic.pi.state_dict(), actor_dir)
+        torch.save(self.actor_critic.q.state_dict(), critic_dir)
+
+    def load_weights(self, prefix="642_"):
+        weights_dir = os.path.join(
+            os.path.dirname(os.path.realpath(__file__)),
+            "../Weights/"
+        )
+        actor_dir =  os.path.join(
+            weights_dir,
+            prefix+"actor_network_weights.pth"
+        )
+        critic_dir =  os.path.join(
+            weights_dir,
+            prefix+"critic_network_weights.pth"
+        )
+
+        if not os.path.exists(actor_dir) or not os.path.exists(critic_dir) :
+            raise FileNotFoundError("Actor or critic weights not found")
+
+        os.makedirs(weights_dir, exist_ok=True)
+        self.actor_critic.pi.load_state_dict(torch.load(actor_dir))
+        self.actor_critic.pi.eval()
+        self.actor_critic.q.load_state_dict(torch.load(critic_dir))
+        self.actor_critic.q.eval()
     
     def preprocess_state(self,state, camera_resolution=(128, 128)):
         """
