@@ -41,6 +41,7 @@ class BaseDomain(QuadXWaypointsEnv):
         camera_resolution: tuple[int, int] = (128, 128),
         num_targets: int = 1,
         max_duration_seconds: int =30,
+        flight_dome_size: float =50,
         # render_resolution: tuple[int, int] = (1280, 720),
         **kwargs
     ):
@@ -54,8 +55,10 @@ class BaseDomain(QuadXWaypointsEnv):
         # Call the base class initializer
         kwargs["num_targets"]=num_targets
         kwargs["max_duration_seconds"]=max_duration_seconds
+        kwargs["flight_dome_size"]=flight_dome_size
         # kwargs["render_resolution"]=render_resolution
         super().__init__(**kwargs)
+        # self.start_pos=np.array([[0.0, 0.0, 2.0]])
         
         self.camera_resolution = camera_resolution
         self.num_targets =num_targets
@@ -72,6 +75,8 @@ class BaseDomain(QuadXWaypointsEnv):
         self.observation_space_shape = (self.observation_space["attitude"].shape[0])#-11
                                         # + (self.observation_space["rgba_cam"].shape[0]*self.observation_space["rgba_cam"].shape[1]*self.observation_space["rgba_cam"].shape[2]) #only a single frame
                                         # + (self.num_targets*3)) # 3 is for 3-dimensions of the deltas
+        self.action_space.low[3]=-1
+        self.action_space.high[3]=1
         self.bounds = (self.action_space.low, self.action_space.high)
 
         # print(self.bounds)
@@ -97,7 +102,10 @@ class BaseDomain(QuadXWaypointsEnv):
         aviary_options["camera_resolution"] = self.camera_resolution
         aviary_options["camera_angle_degrees"] = 15.0
 
+        # self.start_pos=np.array([[0.0, 0.0, 2.0]])
         super().begin_reset(seed, options, aviary_options)
+        # self.start_pos=np.array([[0.0, 0.0, 2.0]])
+
         self.waypoints.reset(self.env, self.np_random)
         self.info["num_targets_reached"] = 0
         super().end_reset()
@@ -188,16 +196,62 @@ class BaseDomain(QuadXWaypointsEnv):
         #     self.reward -=0.01 *math.log(abs(self.state["target_deltas"][0][2])+1) 
 
         # self.reward += action_smoothness 
-        self.reward +=  -0.5*np.sum(np.abs(self.state["target_deltas"][0]))*self.state["attitude"][3] 
+        # self.reward +=  -np.sum(np.abs(self.state["target_deltas"][0]))*0.001
+        # previous_action = self.state["attitude"][13:17]
+        # # print("\t\tprevious action", previous_action)
 
-        # if self.info["collision"]:
+        # lin_pos = self.state["attitude"][10:13]
+        # # print("current pos", lin_pos)
+        # min_height = 0.1
+        # max_height = 30
+
+        # if abs(lin_pos[0]) < max_height:
+        #     self.reward += 0.03
+        # if abs(lin_pos[1]) < max_height:
+        #     self.reward += 0.03
+        # if abs(lin_pos[2]) < max_height:
+        # self.reward += 0.03 #STAYING ALIVE  bonus
+
+        # if self.state["attitude"][6] > 1:
+        #     self.reward += 1
+
+        # if not self.sparse_reward:
+        #     print("mod1", max(3.0 * self.waypoints.progress_to_next_target, 0.0))
+        #     print("mod2", 0.1 / self.waypoints.distance_to_next_target)
+        alive_bonus = 0.1
+        under_dome_bonus = 0.5
+        above_ground_bonus = 0.5
+
+        self.reward += alive_bonus
+
+        lin_pos = self.state["attitude"][10:13]
+        ang_vel = self.state["attitude"][:4]
+
+        if all(abs(pos) <self.flight_dome_size-10 for pos in lin_pos):
+            self.reward += under_dome_bonus
+
+        if lin_pos[2] > 0.1: # Z is all that matters
+            self.reward += above_ground_bonus
+        else:
+            self.reward -= 200
+
+
+
+
+        if self.info["collision"]:
         #     self.reward -= np.sum(np.abs(self.state["target_deltas"]))*self.state["attitude"][1]
-        #     # print("Ouch")
-        # if self.info["out_of_bounds"]:
+            print("\n--------------Crashed--------------")
+            print("Linear position (x, y, z)", lin_pos)
+            print("Recent Action (vp, vq, vr, T)", ang_vel)
+            # self.reward -= 10.0
+
+        if self.info["out_of_bounds"]:
         #     self.reward -= np.sum(np.abs(self.state["target_deltas"]))*self.state["attitude"][1]
         #     self.reward -= np.linalg.norm(self.state["target_deltas"])*self.state["attitude"][1]
-        #     # self.reward = -150.0
-        #     print("OOb")
+            print("\n--------------Out of Bounds--------------")
+            print("Linear position (x,y,z)", lin_pos)
+            print("Recent Action (vp, vq, vr, T)", ang_vel)
+            # self.reward -= 10.0
 
         # Modify the reward calculation here
         if self.waypoints.target_reached:

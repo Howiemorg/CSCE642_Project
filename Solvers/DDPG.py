@@ -80,9 +80,12 @@ class QNetwork(nn.Module):
 
         self.fc_memory1 = nn.Linear(replay_size, hidden_size[0])
         self.fc_memory2 = nn.Linear(hidden_size[0], hidden_size[1])
+
+        self.fc_act1 = nn.Linear(act_dim, hidden_size[0])
+        self.fc_act2= nn.Linear(hidden_size[0], hidden_size[1])
         
         # Final output layer to predict the value, combining CNN (256) and position (64) outputs
-        self.fc_value = nn.Linear(hidden_size[1]*4 + act_dim, 1, dtype=torch.float32)
+        self.fc_value = nn.Linear(hidden_size[1]*5, 1, dtype=torch.float32)
 
         # self.action_low = torch.tensor(bounds[0])
         # self.action_high = torch.tensor(bounds[1])
@@ -130,8 +133,12 @@ class QNetwork(nn.Module):
         x_memory = F.relu(self.fc_memory1(x_memory))
         x_memory = F.relu(self.fc_memory2(x_memory))
 
+        
         if(len(act.shape) < 2):
             act = act.unsqueeze(0)
+        act = F.relu(self.fc_act1(act))
+        act = F.relu(self.fc_act2(act))
+
         # Concatenate image and position features
         x_combined = torch.cat([x_image, x_position, x_deltas, x_memory, act], dim=-1)
         
@@ -239,7 +246,7 @@ class PolicyNetwork(nn.Module):
 
         actions = self.final(x_combined).squeeze(dim=-1)
 
-        return self.action_low + 0.5 * (self.action_high - self.action_low) * (torch.tanh(actions) + 1)
+        return actions
 
 
 class ActorCriticNetwork(nn.Module):
@@ -254,17 +261,17 @@ class DDPG(AbstractSolver):
         super().__init__(env, eval_env, options)
 
         self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-        self.actionBuf = MDPBuffer(self.options.replay_memory_size, env.observation_space_shape+3)
+        self.actionBuf = MDPBuffer(self.options.mdp_buff_size, env.observation_space_shape+3)
 
 
         # Create actor-critic network
         self.actor_critic = ActorCriticNetwork(
             env.observation_space_shape,
             env.action_space.shape[0],
-            env.bounds, self.options.layers, self.actionBuf.state_dim* self.options.replay_memory_size
+            env.bounds, self.options.layers, self.actionBuf.state_dim* self.options.mdp_buff_size
         ).to(self.device)
         # Create target actor-critic network
-        self.target_actor_critic = deepcopy(self.actor_critic)
+        self.target_actor_critic = deepcopy(self.actor_critic).to(self.device)
 
         self.policy = self.create_greedy_policy()
 
@@ -273,13 +280,15 @@ class DDPG(AbstractSolver):
             self.actor_critic.pi.parameters(), lr=self.options.alpha
         )
 
+      
         # Freeze target actor critic network parameters
         for param in self.target_actor_critic.parameters():
             param.requires_grad = False
+            # nn.utils.clip_grad_norm_(param, max_norm=1.0)
 
         # Replay buffer
-        self.actionBuf = MDPBuffer(self.options.replay_memory_size, env.observation_space_shape+3)
-        self.replay_memory = deque(maxlen=options.replay_memory_size)
+        # self.actionBuf = MDPBuffer(self.options.replay_memory_size, env.observation_space_shape+3)
+        self.replay_memory = deque(maxlen=self.options.replay_memory_size)
 
     @torch.no_grad()
     def update_target_networks(self, tau=0.995):
@@ -363,16 +372,19 @@ class DDPG(AbstractSolver):
             The selected action (as an int)
         """
         # state = torch.as_tensor(state, dtype=torch.float32)
-        # state = self.preprocess_state(state)
+        state = self.preprocess_state(state)
         mu = self.actor_critic.pi(state).squeeze(0)
         m = Normal(
             torch.zeros(self.env.action_space.shape[0]),
             torch.ones(self.env.action_space.shape[0]),
         )
         noise_scale = 0.1
-        action_low_limit = torch.tensor(self.env.bounds[0])
-        action_high_limit = torch.tensor(self.env.bounds[1])
-        action = mu.cpu() + noise_scale * m.sample()
+        action_low_limit = torch.tensor(self.env.bounds[0]).to(self.device)
+        action_high_limit = torch.tensor(self.env.bounds[1]).to(self.device)
+        noise = torch.randn_like(mu) * 0.1
+        # action = mu +noise
+        action = (mu + noise).clamp(action_low_limit, action_high_limit)
+        return action.cpu().numpy()
         return torch.clip(
             action,
             action_low_limit,
@@ -392,53 +404,12 @@ class DDPG(AbstractSolver):
         Returns:
             The target q value (as a tensor).
         """
-        ################################
-        #   YOUR IMPLEMENTATION HERE   #
-        ################################
         policy_actions = self.target_actor_critic.pi(next_states)
         q_values = self.target_actor_critic.q(next_states, policy_actions)
-        return rewards + ~dones.bool() * q_values * self.options.gamma
+        return rewards + (1-dones) * q_values * self.options.gamma
 
 
-    def replay(self):
-        """
-        Samples transitions from the replay memory and updates actor_critic network.
-        """
-        if len(self.replay_memory) > self.options.batch_size:
-            minibatch = random.sample(self.replay_memory, self.options.batch_size)
-            minibatch = [
-                np.array(
-                    [
-                        transition[idx]
-                        for transition, idx in zip(minibatch, [i] * len(minibatch))
-                    ]
-                )
-                for i in range(5)
-            ]
-            states, actions, rewards, next_states, dones = minibatch
-            # Convert numpy arrays to torch tensors
-            states = torch.as_tensor(states, dtype=torch.float32)
-            actions = torch.as_tensor(actions, dtype=torch.float32)
-            rewards = torch.as_tensor(rewards, dtype=torch.float32)
-            next_states = torch.as_tensor(next_states, dtype=torch.float32)
-            dones = torch.as_tensor(dones, dtype=torch.float32)
 
-            # Current Q-values
-            current_q = self.actor_critic.q(states, actions)
-            # Target Q-values
-            target_q = self.compute_target_values(next_states, rewards, dones)
-
-            # Optimize critic network
-            loss_q = self.q_loss(current_q, target_q).mean()
-            self.optimizer_q.zero_grad()
-            loss_q.backward()
-            self.optimizer_q.step()
-
-            # Optimize actor network
-            loss_pi = self.pi_loss(states).mean()
-            self.optimizer_pi.zero_grad()
-            loss_pi.backward()
-            self.optimizer_pi.step()
 
     def update_actor_critic(self, state, action, reward, next_state, done):
         """
@@ -455,7 +426,7 @@ class DDPG(AbstractSolver):
         target_q = self.compute_target_values(next_state, reward, done)
 
         # Optimize critic network
-        loss_q = self.q_loss(current_q, target_q).mean()
+        loss_q = self.q_loss(current_q, target_q)
         self.optimizer_q.zero_grad()
         loss_q.backward()
         self.optimizer_q.step()
@@ -465,6 +436,157 @@ class DDPG(AbstractSolver):
         self.optimizer_pi.zero_grad()
         loss_pi.backward()
         self.optimizer_pi.step()
+
+    
+    def train_episode(self):
+        """
+        Runs a single episode of the DDPG algorithm.
+
+        Use:
+            self.select_action(state): Sample an action from the policy.
+            self.step(action): Performs an action in the env.
+            self.memorize(state, action, reward, next_state, done): store the transition in
+                the replay buffer.
+            self.replay(): Sample transitions and update actor_critic.
+            self.update_target_networks(): Update target_actor_critic using Polyak averaging.
+        """
+
+        state, _ = self.env.reset()
+        # state = self.preprocess_state(state)
+        for n in range(self.options.steps):
+            
+            action = self.select_action(state)
+            next_state, reward, done, _ = self.step(action)
+            # next_state = self.preprocess_state(next_state)
+            # self.memorize(state, action, reward, next_state, done)
+            # self.replay()
+            # if len(self.replay_memory) > self.options.batch_size:
+            #     self.update_target_networks()
+            # if done:
+            #     break
+            # self.update_actor_critic(state, action, reward, next_state, done)
+
+            # self.update_target_networks()
+            # state = next_state
+
+            self.memorize(state, action, reward, next_state, done)
+            if done:
+                break
+
+            if len(self.replay_memory) > self.options.batch_size and (n%5 ==0 and n!=0):
+                self.replay()
+                self.update_target_networks()
+
+
+            state = next_state
+
+    def q_loss(self, current_q, target_q):
+        """
+        The q loss function.
+
+        args:
+            current_q: Current Q-values.
+            target_q: Target Q-values.
+
+        Returns:
+            The unreduced loss (as a tensor).
+        """
+
+        # print("CURRENT:",current_q)
+        # print("TARGET:",target_q)
+        # print("SUB:",current_q - target_q)
+        # q_loss = (current_q - target_q) ** 2
+        # print(q_loss)
+        return F.mse_loss(current_q, target_q)
+        return q_loss
+
+    def pi_loss(self, states):
+        """
+        The policy gradient loss function.
+        Note that you are required to define the Loss^PG
+        which should be the integral of the policy gradient
+        The "returns" is the one-hot encoded (return - baseline) value for each action a_t
+        ('0' for unchosen actions).
+
+        args:
+            states:
+
+        Use:
+            self.actor_critic.pi(states): Returns the greedy action at states.
+            self.actor_critic.q(states, actions): Returns the Q-values for (states, actions).
+
+        Returns:
+            The unreduced loss (as a tensor).
+        """
+        return -self.actor_critic.q(states, self.actor_critic.pi(states))
+
+    def __str__(self):
+        return "DDPG"
+    
+    # def replay(self):
+    #     """
+    #     Samples transitions from the replay memory and updates actor_critic network.
+    #     """
+    #     if len(self.replay_memory) < self.options.batch_size:
+    #         return
+    #     batch = random.sample(self.replay_memory, self.options.batch_size)
+    #     states, actions, rewards, next_states, dones = map(np.array, zip(*batch))
+    #     self.update_actor_critic(states, actions, rewards, next_states, dones)
+    def replay(self):
+        """
+        Samples transitions from the replay memory and updates actor_critic network.
+        """
+        if len(self.replay_memory) > self.options.batch_size:
+            minibatch = random.sample(self.replay_memory, self.options.batch_size)
+            minibatch = [
+                np.array(
+                    [
+                        transition[idx]
+                        for transition, idx in zip(minibatch, [i] * len(minibatch))
+                    ]
+                )
+                for i in range(5)
+            ]
+
+            states, actions, rewards, next_states, dones = minibatch
+            # Convert numpy arrays to torch tensors
+            # vfunc = np.vectorize(self.preprocess_state)
+            states = [
+                self.preprocess_state(s)
+                for s in states
+            ]
+            # for components in zip(*states):
+            #     print(torch.cat(components).shape)
+            states = tuple([torch.cat(components) for components in zip(*states)] )
+            actions = torch.as_tensor(actions, dtype=torch.float32).to(self.device)
+            rewards = torch.as_tensor(rewards, dtype=torch.float32).to(self.device)
+            next_states = [
+                self.preprocess_state(s)
+                for s in next_states
+            ]
+            next_states = tuple([torch.cat(components) for components in zip(*next_states)] )
+            dones = torch.as_tensor(dones, dtype=torch.float32).to(self.device)
+
+            # Current Q-values
+            current_q = self.actor_critic.q(states, actions)
+            # Target Q-values
+            with torch.no_grad():
+                target_q = self.compute_target_values(next_states, rewards, dones)
+
+
+            # Optimize critic network
+            loss_q = self.q_loss(current_q, target_q).mean()
+            self.optimizer_q.zero_grad()
+            loss_q.backward()
+            self.optimizer_q.step()
+
+            # Optimize actor network
+            loss_pi = self.pi_loss(states).mean()
+            self.optimizer_pi.zero_grad()
+            loss_pi.backward()
+            self.optimizer_pi.step()
+            print(f"Loss Q: {loss_q.item():.3f}, Loss Pi: {loss_pi.item():.3f}")
+
 
     def memorize(self, state, action, reward, next_state, done):
         """
@@ -512,86 +634,6 @@ class DDPG(AbstractSolver):
         self.actor_critic.q.load_state_dict(torch.load(critic_dir))
         self.actor_critic.q.eval()
 
-    def train_episode(self):
-        """
-        Runs a single episode of the DDPG algorithm.
-
-        Use:
-            self.select_action(state): Sample an action from the policy.
-            self.step(action): Performs an action in the env.
-            self.memorize(state, action, reward, next_state, done): store the transition in
-                the replay buffer.
-            self.replay(): Sample transitions and update actor_critic.
-            self.update_target_networks(): Update target_actor_critic using Polyak averaging.
-        """
-
-        state, _ = self.env.reset()
-        state = self.preprocess_state(state)
-        for _ in range(self.options.steps):
-            ################################
-            #   YOUR IMPLEMENTATION HERE   #
-            ################################
-            
-            action = self.select_action(state)
-            next_state, reward, done, _ = self.step(action)
-            next_state = self.preprocess_state(next_state)
-            # self.memorize(state, action, reward, next_state, done)
-            # self.replay()
-            # if len(self.replay_memory) > self.options.batch_size:
-            #     self.update_target_networks()
-            self.update_actor_critic(state, action, reward, next_state, done)
-
-            self.update_target_networks()
-            if done:
-                break
-            state = next_state
-
-    def q_loss(self, current_q, target_q):
-        """
-        The q loss function.
-
-        args:
-            current_q: Current Q-values.
-            target_q: Target Q-values.
-
-        Returns:
-            The unreduced loss (as a tensor).
-        """
-        ################################
-        #   YOUR IMPLEMENTATION HERE   #
-        ################################
-        # print("CURRENT:",current_q)
-        # print("TARGET:",target_q)
-        # print("SUB:",current_q - target_q)
-        q_loss = (current_q - target_q) ** 2
-        # print(q_loss)
-        return q_loss
-
-    def pi_loss(self, states):
-        """
-        The policy gradient loss function.
-        Note that you are required to define the Loss^PG
-        which should be the integral of the policy gradient
-        The "returns" is the one-hot encoded (return - baseline) value for each action a_t
-        ('0' for unchosen actions).
-
-        args:
-            states:
-
-        Use:
-            self.actor_critic.pi(states): Returns the greedy action at states.
-            self.actor_critic.q(states, actions): Returns the Q-values for (states, actions).
-
-        Returns:
-            The unreduced loss (as a tensor).
-        """
-        ################################
-        #   YOUR IMPLEMENTATION HERE   #
-        ################################
-        return -self.actor_critic.q(states, self.actor_critic.pi(states))
-
-    def __str__(self):
-        return "DDPG"
 
     # def plot(self, stats, smoothing_window=20, final=False):
     #     plotting.plot_episode_stats(stats, smoothing_window, final=final)
