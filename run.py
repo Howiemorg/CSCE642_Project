@@ -158,7 +158,7 @@ def build_parser():
         "--replay",
         type="int",
         dest="replay_memory_size",
-        default=4,
+        default=64,
         help="Size of the replay memory",
     )
     # parser.add_option(
@@ -176,6 +176,14 @@ def build_parser():
         dest="batch_size",
         default=32,
         help="Size of batches to sample from the replay memory",
+    )
+    parser.add_option(
+        "-v",
+        "--mdp_buff_size",
+        type="int",
+        dest="mdp_buff_size",
+        default=5,
+        help="Size of mdp buffer",
     )
     parser.add_option(
         "--no-plots",
