@@ -25,9 +25,9 @@ class QNetwork(nn.Module):
         
         # Fully Connected Layers for CNN output
         self.fc_cnn1 = nn.Linear(64 * 32 * 32, 512, dtype=torch.float32)
-        self.fc_cnn2 = nn.Linear(512, hidden_sizes[1], dtype=torch.float32)
+        self.fc_cnn2 = nn.Linear(512, 256, dtype=torch.float32)
 
-        sizes = [obs_dim + act_dim + hidden_sizes[1] + 3] + hidden_sizes + [1]
+        sizes = [obs_dim + act_dim + 256 + 3] + hidden_sizes + [1]
         self.layers = nn.ModuleList()
         for i in range(len(sizes) - 1):
             self.layers.append(nn.Linear(sizes[i], sizes[i + 1]))
@@ -61,9 +61,9 @@ class PolicyNetwork(nn.Module):
         
         # Fully Connected Layers for CNN output
         self.fc_cnn1 = nn.Linear(64 * 32 * 32, 512, dtype=torch.float32)
-        self.fc_cnn2 = nn.Linear(512, hidden_sizes[1], dtype=torch.float32)
+        self.fc_cnn2 = nn.Linear(512, 256, dtype=torch.float32)
 
-        sizes = [obs_dim + hidden_sizes[1] + 3] + hidden_sizes + [act_dim]
+        sizes = [obs_dim + 256 + 3] + hidden_sizes + [act_dim]
         
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         
@@ -89,7 +89,7 @@ class PolicyNetwork(nn.Module):
         x = torch.cat([x_image, x_position, x_deltas], dim=-1)
         for i in range(len(self.layers) - 1):
             x = F.relu(self.layers[i](x))
-        return self.action_low + 0.5 * (self.action_high - self.action_low) * (torch.tanh(self.layers[-1](x)) + 1)
+        return self.action_high * (F.tanh(self.layers[-1](x)))
 
 
 class ActorCriticNetwork(nn.Module):
@@ -103,7 +103,6 @@ class MyDDPG(AbstractSolver):
     def __init__(self, env, eval_env, options):
         super().__init__(env, eval_env, options)
         self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-
         # Create actor-critic network
         self.actor_critic = ActorCriticNetwork(
             env.observation_space_shape,
@@ -115,10 +114,11 @@ class MyDDPG(AbstractSolver):
         self.target_actor_critic = deepcopy(self.actor_critic)
 
         self.policy = self.create_greedy_policy()
+        self.noise_scale = 0.4
 
-        self.optimizer_q = Adam(self.actor_critic.q.parameters(), lr=self.options.alpha)
+        self.optimizer_q = Adam(self.actor_critic.q.parameters(), lr=self.options.critic_alpha)
         self.optimizer_pi = Adam(
-            self.actor_critic.pi.parameters(), lr=self.options.alpha
+            self.actor_critic.pi.parameters(), lr=self.options.actor_alpha
         )
 
         # Freeze target actor critic network parameters
@@ -245,18 +245,19 @@ class MyDDPG(AbstractSolver):
         """
         mu = self.actor_critic.pi(state).squeeze(0)
         m = Normal(
-            torch.zeros(self.env.action_space.shape[0]),
-            torch.ones(self.env.action_space.shape[0]),
+            torch.zeros(self.env.action_space.shape[0], device=self.device),
+            torch.ones(self.env.action_space.shape[0], device=self.device),
         )
-        noise_scale = 0.1
-        action_low_limit = torch.tensor(self.env.bounds[0])
-        action_high_limit = torch.tensor(self.env.bounds[1])
-        action = mu.cpu() + noise_scale * m.sample()
+        self.noise_scale = max(.1, self.noise_scale * .99)
+        # print("Noise:", self.noise_scale)
+        action_low_limit = torch.tensor(self.env.bounds[0], device=self.device)
+        action_high_limit = torch.tensor(self.env.bounds[1], device=self.device)
+        action = mu + self.noise_scale * m.sample()
         return torch.clip(
             action,
             action_low_limit,
             action_high_limit,
-        ).numpy()
+        ).cpu().numpy()
 
     @torch.no_grad()
     def compute_target_values(self, next_states, rewards, dones):
@@ -275,8 +276,8 @@ class MyDDPG(AbstractSolver):
         #   YOUR IMPLEMENTATION HERE   #
         ################################
         policy_actions = self.target_actor_critic.pi(next_states)
-        q_values = self.target_actor_critic.q(next_states, policy_actions).cpu()
-        return rewards + ~dones.bool() * q_values * self.options.gamma
+        q_values = self.target_actor_critic.q(next_states, policy_actions)
+        return rewards + (1-dones) * q_values * self.options.gamma
 
 
     def replay(self):
@@ -296,6 +297,7 @@ class MyDDPG(AbstractSolver):
                 for i in range(9)
             ]
             state_images, state_attitudes, state_deltas, actions, rewards, next_state_images, next_state_attitudes, next_state_deltas, dones = minibatch
+
             # print(state_images.shape)
             # print(state_attitudes.shape)
             # print(state_deltas.shape)
@@ -304,11 +306,11 @@ class MyDDPG(AbstractSolver):
             state_attitudes = torch.as_tensor(state_attitudes, dtype=torch.float32, device=self.device)
             state_deltas = torch.as_tensor(state_deltas, dtype=torch.float32, device=self.device)
             actions = torch.as_tensor(actions, dtype=torch.float32, device=self.device)
-            rewards = torch.as_tensor(rewards, dtype=torch.float32)
+            rewards = torch.as_tensor(rewards, dtype=torch.float32, device=self.device)
             next_state_images = torch.as_tensor(next_state_images, dtype=torch.float32, device=self.device)
             next_state_attitudes = torch.as_tensor(next_state_attitudes, dtype=torch.float32, device=self.device)
             next_state_deltas = torch.as_tensor(next_state_deltas, dtype=torch.float32, device=self.device)
-            dones = torch.as_tensor(dones, dtype=torch.float32)
+            dones = torch.as_tensor(dones, dtype=torch.float32, device=self.device)
 
             # Current Q-values
             current_q = self.actor_critic.q((state_images, state_attitudes, state_deltas), actions)
@@ -316,7 +318,7 @@ class MyDDPG(AbstractSolver):
             target_q = self.compute_target_values((next_state_images, next_state_attitudes, next_state_deltas), rewards, dones)
 
             # Optimize critic network
-            loss_q = self.q_loss(current_q.cpu(), target_q)
+            loss_q = self.q_loss(current_q, target_q)
             self.optimizer_q.zero_grad()
             loss_q.backward()
             self.optimizer_q.step()
@@ -327,8 +329,7 @@ class MyDDPG(AbstractSolver):
             loss_pi.backward()
             self.optimizer_pi.step()
 
-            # print(f"Critic Loss: {loss_q.item()}, Actor Loss: {loss_pi.item()}")
-
+            #print(f"Loss Q: {loss_q.item():.3f}, Loss Pi: {loss_pi.item():.3f}")
 
     def memorize(self, state, action, reward, next_state, done):
         """

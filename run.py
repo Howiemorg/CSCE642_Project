@@ -86,7 +86,7 @@ def build_parser():
         "--actor_alpha",
         dest="actor_alpha",
         type="float",
-        default=3e-4,
+        default=1e-4,
         help="The learning rate (alpha) for updating actor network parameters",
     )
     parser.add_option(
@@ -94,7 +94,7 @@ def build_parser():
         "--critic_alpha",
         dest="critic_alpha",
         type="float",
-        default=3e-4,
+        default=1e-3,
         help="The learning rate (alpha) for updating critic network parameters",
     )
     parser.add_option(

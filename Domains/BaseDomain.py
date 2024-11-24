@@ -41,7 +41,7 @@ class BaseDomain(QuadXWaypointsEnv):
         camera_resolution: tuple[int, int] = (128, 128),
         num_targets: int = 1,
         max_duration_seconds: int =30,
-        flight_dome_size: float =50,
+        flight_dome_size: float =10,
         # render_resolution: tuple[int, int] = (1280, 720),
         **kwargs
     ):
@@ -218,22 +218,25 @@ class BaseDomain(QuadXWaypointsEnv):
         # if not self.sparse_reward:
         #     print("mod1", max(3.0 * self.waypoints.progress_to_next_target, 0.0))
         #     print("mod2", 0.1 / self.waypoints.distance_to_next_target)
-        alive_bonus = 0.1
-        under_dome_bonus = 0.5
-        above_ground_bonus = 0.5
+            # self.reward -= self.waypoints.distance_to_next_target
+        
+        
+        # alive_bonus = 0.1
+        # under_dome_bonus = 0.5
+        # above_ground_bonus = 0.5
 
-        self.reward += alive_bonus
+        # self.reward += alive_bonus
 
         lin_pos = self.state["attitude"][10:13]
         ang_vel = self.state["attitude"][:4]
 
-        if all(abs(pos) <self.flight_dome_size-10 for pos in lin_pos):
-            self.reward += under_dome_bonus
+        # if all(abs(pos) <self.flight_dome_size-10 for pos in lin_pos):
+        #     self.reward += under_dome_bonus
 
-        if lin_pos[2] > 0.1: # Z is all that matters
-            self.reward += above_ground_bonus
-        else:
-            self.reward -= 200
+        # if lin_pos[2] > 0.1: # Z is all that matters
+        #     self.reward += above_ground_bonus
+        # else:
+        #     self.reward -= 200
 
 
 

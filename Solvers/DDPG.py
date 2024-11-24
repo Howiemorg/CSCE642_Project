@@ -381,7 +381,7 @@ class DDPG(AbstractSolver):
         noise_scale = 0.1
         action_low_limit = torch.tensor(self.env.bounds[0]).to(self.device)
         action_high_limit = torch.tensor(self.env.bounds[1]).to(self.device)
-        noise = torch.randn_like(mu) * 0.1
+        noise = torch.randn_like(mu) * 0.3
         # action = mu +noise
         action = (mu + noise).clamp(action_low_limit, action_high_limit)
         return action.cpu().numpy()
