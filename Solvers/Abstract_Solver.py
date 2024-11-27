@@ -39,29 +39,12 @@ class AbstractSolver(ABC):
         # print(action)
         next_state, reward, terminated, truncated, info = self.env.step(action)
 
-        reward += self.calc_reward(next_state)
-
         # Update statistics
         self.statistics[Statistics.Rewards.value] += reward
         self.statistics[Statistics.Steps.value] += 1
         self.total_steps += 1
 
         return next_state, reward, terminated or truncated, info
-
-    def calc_reward(self, state):
-        # Create a new reward function for the CartPole domain that takes into account the degree of the pole
-        try:
-            domain = self.env.unwrapped.spec.id
-        except:
-            domain = self.env.name
-        if domain == "CartPole-v1":
-            x, x_dot, theta, theta_dot = state
-            r1 = (self.env.x_threshold - abs(x)) / self.env.x_threshold - 0.8
-            r2 = (
-                self.env.theta_threshold_radians - abs(theta)
-            ) / self.env.theta_threshold_radians - 0.5
-            return r1 + r2
-        return 0
 
     def run_greedy(self):
         """

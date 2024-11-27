@@ -40,8 +40,8 @@ class BaseDomain(QuadXWaypointsEnv):
         duck_position: tuple[float, float, float] = (1.0, 1.0, 0.5),
         camera_resolution: tuple[int, int] = (128, 128),
         num_targets: int = 1,
-        max_duration_seconds: int =30,
-        flight_dome_size: float =10,
+        max_duration_seconds: int = 10,
+        flight_dome_size: float = 5,
         # render_resolution: tuple[int, int] = (1280, 720),
         **kwargs
     ):
@@ -184,83 +184,28 @@ class BaseDomain(QuadXWaypointsEnv):
         """Compute termination, truncation, and modified reward function."""
         # Call the base class version if you want to use it as a starting point
         super().compute_term_trunc_reward()
-        # action_smoothness = max(-5,np.linalg.norm(self.state["attitude"][:3]- self.state["attitude"][-8:-5]))
         
-        # # if(self.step_count>20):
-        # #     self.reward +=  max(0.1*self.step_count, 0.5)
-        # if abs(self.state["target_deltas"][0][0]) > 0.2:
-        #     self.reward -=0.01*math.log(abs(self.state["target_deltas"][0][0])+1) 
-        # if abs(self.state["target_deltas"][0][1]) > 0.2:
-        #     self.reward -=0.01 *math.log(abs(self.state["target_deltas"][0][1])+1) 
-        # if abs(self.state["target_deltas"][0][2]) > 0.2:
-        #     self.reward -=0.01 *math.log(abs(self.state["target_deltas"][0][2])+1) 
+        battery_discount = 0.1
 
-        # self.reward += action_smoothness 
-        # self.reward +=  -np.sum(np.abs(self.state["target_deltas"][0]))*0.001
-        # previous_action = self.state["attitude"][13:17]
-        # # print("\t\tprevious action", previous_action)
-
-        # lin_pos = self.state["attitude"][10:13]
-        # # print("current pos", lin_pos)
-        # min_height = 0.1
-        # max_height = 30
-
-        # if abs(lin_pos[0]) < max_height:
-        #     self.reward += 0.03
-        # if abs(lin_pos[1]) < max_height:
-        #     self.reward += 0.03
-        # if abs(lin_pos[2]) < max_height:
-        # self.reward += 0.03 #STAYING ALIVE  bonus
-
-        # if self.state["attitude"][6] > 1:
-        #     self.reward += 1
-
-        # if not self.sparse_reward:
-        #     print("mod1", max(3.0 * self.waypoints.progress_to_next_target, 0.0))
-        #     print("mod2", 0.1 / self.waypoints.distance_to_next_target)
-            # self.reward -= self.waypoints.distance_to_next_target
-        
-        
-        # alive_bonus = 0.1
-        # under_dome_bonus = 0.5
-        # above_ground_bonus = 0.5
-
-        # self.reward += alive_bonus
+        self.reward -= battery_discount
 
         lin_pos = self.state["attitude"][10:13]
         ang_vel = self.state["attitude"][:4]
 
-        # if all(abs(pos) <self.flight_dome_size-10 for pos in lin_pos):
-        #     self.reward += under_dome_bonus
-
-        # if lin_pos[2] > 0.1: # Z is all that matters
-        #     self.reward += above_ground_bonus
-        # else:
-        #     self.reward -= 200
-
-
-
-
         if self.info["collision"]:
-        #     self.reward -= np.sum(np.abs(self.state["target_deltas"]))*self.state["attitude"][1]
             print("\n--------------Crashed--------------")
             print("Linear position (x, y, z)", lin_pos)
             print("Recent Action (vp, vq, vr, T)", ang_vel)
-            # self.reward -= 10.0
 
         if self.info["out_of_bounds"]:
-        #     self.reward -= np.sum(np.abs(self.state["target_deltas"]))*self.state["attitude"][1]
-        #     self.reward -= np.linalg.norm(self.state["target_deltas"])*self.state["attitude"][1]
             print("\n--------------Out of Bounds--------------")
             print("Linear position (x,y,z)", lin_pos)
             print("Recent Action (vp, vq, vr, T)", ang_vel)
-            # self.reward -= 10.0
 
         # Modify the reward calculation here
         if self.waypoints.target_reached:
             print("FUICKS")
-            self.reward += 200.0  # Example change to reward
-            # Add any additional reward conditions specific to the duck, if needed
+            self.reward += 200.0
    
     def target_reached(self) -> bool:
         """Checks if the targets has been reached."""
