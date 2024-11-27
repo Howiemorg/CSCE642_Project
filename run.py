@@ -40,28 +40,12 @@ def build_parser():
         metavar="FILE",
     )
     parser.add_option(
-        "-x",
-        "--experiment_dir",
-        dest="experiment_dir",
-        default="Experiments",
-        help="Directory to save Tensorflow summaries in",
-        metavar="FILE",
-    )
-    parser.add_option(
         "-e",
         "--episodes",
         type="int",
         dest="episodes",
-        default=500,
+        default=4000,
         help="Number of episodes for training",
-    )
-    parser.add_option(
-        "-t",
-        "--steps",
-        type="int",
-        dest="steps",
-        default=10000,
-        help="Maximal number of steps per episode",
     )
     parser.add_option(
         "-l",
@@ -74,19 +58,11 @@ def build_parser():
         " that is connected to the output",
     )
     parser.add_option(
-        "-a",
-        "--alpha",
-        dest="alpha",
-        type="float",
-        default=1e-4,
-        help="The learning rate (alpha) for updating state/action values",
-    )
-    parser.add_option(
         "-j",
         "--actor_alpha",
         dest="actor_alpha",
         type="float",
-        default=1e-4,
+        default=3e-4,
         help="The learning rate (alpha) for updating actor network parameters",
     )
     parser.add_option(
@@ -94,7 +70,7 @@ def build_parser():
         "--critic_alpha",
         dest="critic_alpha",
         type="float",
-        default=1e-3,
+        default=3e-3,
         help="The learning rate (alpha) for updating critic network parameters",
     )
     parser.add_option(
@@ -161,14 +137,6 @@ def build_parser():
         default=64,
         help="Size of the replay memory",
     )
-    # parser.add_option(
-    #     "-N",
-    #     "--update",
-    #     type="int",
-    #     dest="update_target_estimator_every",
-    #     default=10000,
-    #     help="Copy parameters from the Q estimator to the target estimator every N steps.",
-    # )
     parser.add_option(
         "-b",
         "--batch_size",
