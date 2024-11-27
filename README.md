@@ -5,7 +5,7 @@ This project, **Autonomous Drone Navigation using DDPG**, was developed as part 
 
 ## Technologies Used
 The following technologies and tools were utilized in this project:
-- **Programming Languages:** Python
+- **Programming Languages:** Python 3.10
 - **Frameworks/Libraries:**  PyTorch, PyFlyt, Numpy, Matplotlib, OpenAI Gymnasium, PyBullet
 
 ## Installation
@@ -19,11 +19,18 @@ To set up the project locally, follow these steps:
    ```bash
    cd CSCE642_Project
    ```
-3. Install dependencies:
+3. Create a virutal environment & activate it:
+   ```bash
+   python -m venv dronetest
+   ```
+   ```bash
+   dronetest/Scripts/activate.sh or .bat
+   ```
+4. Install dependencies:
    ```bash
    pip install -r requirements.txt
    ```
-4. Run the project (For example, with full default values):
+5. Run the project (For example, with full default values):
    ```bash
    python run.py -s myddpg -d Empty
    ```
@@ -48,9 +55,9 @@ Run.py parameters are listed below:
 
 | Short Flag | Long Flag                  | Type   | Default          | Help                                                                                                                                                            |
 |------------|----------------------------|--------|------------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| -s         | --agent                   | string | random           | Solver from [avs.solvers]                                                                                                                                       |
+| -s         | --agent                   | string | myddpg           | Solver from [avs.solvers]                                                                                                                                       |
 | -d         | --domain                  | string | Empty            | Domain from [dvs.domains]                                                                                                                                       |
-| -o         | --outfile                 | string | out              | Write results to FILE                                                                                                                                           |
+| -o         | --outfile                 | string | out.csv          | Write results to FILE                                                                                                                                           |
 | -e         | --episodes                | int    | 4000             | Number of episodes for training                                                                                                                                |
 | -l         | --layers                  | string | [512,256]        | Size of hidden layers in a Deep neural net. e.g., "[10,15]" creates a net where the input layer is connected to a layer of size 10 that connects to size 15 etc. |
 | -j         | --actor_alpha             | float  | 3e-4             | The learning rate (alpha) for updating actor network parameters                                                                                                |
@@ -72,9 +79,19 @@ Run.py parameters are listed below:
 - Howie Morgenthaler, UIN: 130008345, Email: howiemorgenthaler@tamu.edu
 
 ## Acknowledgments
-This project was inspired by [source of inspiration, if applicable]. Special thanks to [professor/mentor/peers] for guidance and support.
+This project was inspired by the *csce642-deepRL* repo from the CSCE 642 course. 
 
 ## Known Issues
 
+If running the program is raising a `Model/target.urdf` file not found error from the PyFlyt library, here's a simple fix:
+
+1. Navigate to the PyFlyt Libary directory (assuming a venv named dronetest):
+   ```bash
+   cd dronetest/Lib/site-packages/PyFlyt
+   ```
+2. Copy the models directory to gym_envs (as a sub-directory):
+   ```bash
+   cp -a models/. gym_envs/models
+   ```
 
 
