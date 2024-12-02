@@ -112,6 +112,7 @@ class MyDDPG(AbstractSolver):
         ).to(self.device)
         # Create target actor-critic network
         self.target_actor_critic = deepcopy(self.actor_critic)
+        self.num_episodes = 0
 
         self.policy = self.create_greedy_policy()
         self.noise_scale = 0.4
@@ -120,6 +121,8 @@ class MyDDPG(AbstractSolver):
         self.optimizer_pi = Adam(
             self.actor_critic.pi.parameters(), lr=self.options.actor_alpha
         )
+
+        self.load_weights()
 
         # Freeze target actor critic network parameters
         for param in self.target_actor_critic.parameters():
@@ -150,6 +153,7 @@ class MyDDPG(AbstractSolver):
 
         @torch.no_grad()
         def policy_fn(state):
+            self.actor_critic.pi.eval()
             state = self.preprocess_state(state)
             return self.actor_critic.pi(state).squeeze(0).cpu().numpy()
 
@@ -172,7 +176,7 @@ class MyDDPG(AbstractSolver):
         torch.save(self.actor_critic.pi.state_dict(), actor_dir)
         torch.save(self.actor_critic.q.state_dict(), critic_dir)
 
-    def load_weights(self, prefix="642_"):
+    def load_weights(self, prefix="642_ddpg_"):
         weights_dir = os.path.join(
             os.path.dirname(os.path.realpath(__file__)),
             "../Weights/"
@@ -191,9 +195,9 @@ class MyDDPG(AbstractSolver):
 
         os.makedirs(weights_dir, exist_ok=True)
         self.actor_critic.pi.load_state_dict(torch.load(actor_dir))
-        self.actor_critic.pi.eval()
+        # self.actor_critic.pi.eval()
         self.actor_critic.q.load_state_dict(torch.load(critic_dir))
-        self.actor_critic.q.eval()
+        # self.actor_critic.q.eval()
     
     def preprocess_state(self,state, camera_resolution=(128, 128)):
         """
@@ -368,6 +372,10 @@ class MyDDPG(AbstractSolver):
             if done:
                 break
             state = next_state
+
+        self.num_episodes += 1
+        if(self.num_episodes % self.options.save_every == 0):
+            self.export_weights()
 
     def q_loss(self, current_q, target_q):
         """

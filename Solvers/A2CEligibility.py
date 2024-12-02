@@ -1,3 +1,4 @@
+import os
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -23,7 +24,7 @@ class ActorNetwork(nn.Module):
         self.fc_cnn2 = nn.Linear(512, 256, dtype=torch.float32)
         
         # Fully Connected Branch for Position Record (e.g., Current and Past Position)
-        self.fc_position1 = nn.Linear(obs_dim, 128, dtype=torch.float32)
+        self.fc_position1 = nn.Linear(obs_dim + 3, 128, dtype=torch.float32)
         self.fc_position2 = nn.Linear(128, 64, dtype=torch.float32)
 
         # Final layers for mean (mu) and standard deviation (std) of actions
@@ -96,7 +97,7 @@ class CriticNetwork(nn.Module):
         self.fc_cnn2 = nn.Linear(512, 256, dtype=torch.float32)
         
         # Fully Connected Branch for Position Record (e.g., Current and Past Position)
-        self.fc_position1 = nn.Linear(obs_dim, 128, dtype=torch.float32)
+        self.fc_position1 = nn.Linear(obs_dim + 3, 128, dtype=torch.float32)
         self.fc_position2 = nn.Linear(128, 64, dtype=torch.float32)
         
         # Final output layer to predict the value, combining CNN (256) and position (64) outputs
@@ -136,7 +137,7 @@ class A2CEligibility(AbstractSolver):
         self.policy = self.create_greedy_policy()
 
         self.actor_optimizer = Adam(
-            self.actor.parameters(), lr=self.options.alpha)
+            self.actor.parameters(), lr=self.options.actor_alpha)
 
         # self.z_actor = torch.zeros(self.actor.total_params_amt)
         self.z_actor = [torch.zeros_like(
@@ -147,11 +148,13 @@ class A2CEligibility(AbstractSolver):
         ).to(self.device)
 
         self.critic_optimizer = Adam(
-            self.critic.parameters(), lr=self.options.alpha) 
+            self.critic.parameters(), lr=self.options.critic_alpha) 
 
         # self.z_critic = torch.zeros(self.critic.total_params_amt)
         self.z_critic = [torch.zeros_like(
             param) for param in self.critic.parameters()]
+        
+        self.num_episodes = 0
 
     def create_greedy_policy(self):
         """
@@ -255,6 +258,23 @@ class A2CEligibility(AbstractSolver):
         # print("prob:",log_prob)
 
         return mus, log_prob, value
+    
+    def export_weights(self, prefix="642_a2c_elig_"):
+        weights_dir = os.path.join(
+            os.path.dirname(os.path.realpath(__file__)),
+            "../Weights/"
+        )
+        actor_dir =  os.path.join(
+            weights_dir,
+            prefix+"actor_network_weights.pth"
+        )
+        critic_dir =  os.path.join(
+            weights_dir,
+            prefix+"critic_network_weights.pth"
+        )
+        os.makedirs(weights_dir, exist_ok=True)
+        torch.save(self.actor.state_dict(), actor_dir)
+        torch.save(self.critic.state_dict(), critic_dir)
 
 
     def update_critic(self, advantage, state):
@@ -322,6 +342,10 @@ class A2CEligibility(AbstractSolver):
             self.update_critic(advantage, self.preprocess_state(state))
             I *= self.options.gamma
             state = next_state
+
+        self.num_episodes += 1
+        if(self.num_episodes % self.options.save_every == 0):
+            self.export_weights()
 
     def __str__(self):
         return "A2CEligibility"

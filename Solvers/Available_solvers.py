@@ -6,7 +6,6 @@ solvers = [
     "epsilon_greedy",
     "a2c",
     "a2c_elig",
-    "ddpg",
     "my_ddpg"
 ]
 
@@ -28,9 +27,6 @@ def get_solver_class(name):
         from Solvers.A2CEligibility import A2CEligibility
         return A2CEligibility
     elif name == solvers[5]:
-        from Solvers.DDPG import DDPG
-        return DDPG
-    elif name == solvers[6]:
         from Solvers.MyDDPG import MyDDPG
         return MyDDPG
     else:

@@ -184,7 +184,7 @@ class BaseDomain(QuadXWaypointsEnv):
         """Compute termination, truncation, and modified reward function."""
         # Call the base class version if you want to use it as a starting point
         super().compute_term_trunc_reward()
-        
+
         battery_discount = 0.1
 
         self.reward -= battery_discount

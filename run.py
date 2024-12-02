@@ -40,12 +40,28 @@ def build_parser():
         metavar="FILE",
     )
     parser.add_option(
+        "-x",
+        "--experiment_dir",
+        dest="experiment_dir",
+        default="Experiments",
+        help="Directory to save Tensorflow summaries in",
+        metavar="FILE",
+    )
+    parser.add_option(
         "-e",
         "--episodes",
         type="int",
         dest="episodes",
         default=4000,
         help="Number of episodes for training",
+    )
+    parser.add_option(
+        "-t",
+        "--steps",
+        type="int",
+        dest="steps",
+        default=10000,
+        help="Maximal number of steps per episode",
     )
     parser.add_option(
         "-l",
@@ -62,7 +78,7 @@ def build_parser():
         "--actor_alpha",
         dest="actor_alpha",
         type="float",
-        default=3e-4,
+        default=1e-5,
         help="The learning rate (alpha) for updating actor network parameters",
     )
     parser.add_option(
@@ -160,6 +176,12 @@ def build_parser():
         default=False,
         action="store_true",
     )
+    parser.add_option(
+        "--save_every",
+        type="int",
+        help="The number/step of episodes to save the model weights",
+        default=5000,
+    )
     return parser
 
 
@@ -254,8 +276,10 @@ def main(options):
             solver.load_weights()
         except FileNotFoundError:
             print("Weights not found, starting with no weights")
-        
-        solver.run_greedy()
+        for i_episode in range(options.episodes):
+            rewards, steps = solver.run_greedy()
+            stats.episode_lengths.append(steps)
+            stats.episode_rewards.append(rewards)
         solver.plot(stats, int(0.1 * options.episodes), True)
 
         solver.close()

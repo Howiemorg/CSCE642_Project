@@ -52,16 +52,13 @@ class AbstractSolver(ABC):
         """
         policy = self.create_greedy_policy()
         state, _ = self.eval_env.reset()
-        # if self.options.domain == "FlappyBird-v0":
-        #     self.eval_env.render()
+
         rewards = 0
         steps = 0
         for _ in range(self.options.steps):
             action = policy(state)
             state, reward, done, _, _ = self.eval_env.step(action)
-            # if self.options.domain == "FlappyBird-v0":
-            #     self.eval_env.render()
-            #     time.sleep(1 / 30)
+
             rewards += reward
             steps += 1
             if done:
