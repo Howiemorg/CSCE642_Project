@@ -53,6 +53,12 @@ CSCE642_Project/
 
 Run.py parameters are listed below:
 
+For this project, the way to replicate the results we show in the final report is to run:
+
+```bash
+   python run.py -s myddpg -d Empty
+   ```
+
 | Short Flag | Long Flag                  | Type   | Default          | Help                                                                                                                                                            |
 |------------|----------------------------|--------|------------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | -s         | --agent                   | string | myddpg           | Solver from [avs.solvers]                                                                                                                                       |
@@ -60,8 +66,8 @@ Run.py parameters are listed below:
 | -o         | --outfile                 | string | out.csv          | Write results to FILE                                                                                                                                           |
 | -e         | --episodes                | int    | 4000             | Number of episodes for training                                                                                                                                |
 | -l         | --layers                  | string | [512,256]        | Size of hidden layers in a Deep neural net. e.g., "[10,15]" creates a net where the input layer is connected to a layer of size 10 that connects to size 15 etc. |
-| -j         | --actor_alpha             | float  | 3e-4             | The learning rate (alpha) for updating actor network parameters                                                                                                |
-| -k         | --critic_alpha            | float  | 3e-3             | The learning rate (alpha) for updating critic network parameters                                                                                               |
+| -j         | --actor_alpha             | float  | 3e-3             | The learning rate (alpha) for updating actor network parameters                                                                                                |
+| -k         | --critic_alpha            | float  | 3e-5             | The learning rate (alpha) for updating critic network parameters                                                                                               |
 | -r         | --seed                    | int    | Random integer   | Seed integer for random stream                                                                                                                                 |
 | -g         | --gamma                   | float  | 1.00             | The discount factor (gamma)                                                                                                                                    |
 | -p         | --epsilon                 | float  | 0.1              | Initial epsilon for epsilon-greedy policies (might decay over time)                                                                                            |
@@ -69,9 +75,6 @@ Run.py parameters are listed below:
 | -b         | --batch_size              | int    | 20000            | Size of batches to sample from the replay memory                                                                                                               |
 | -v         | --mdp_buff_size           | int    | 5                | Size of Markov Decision Prioirty buffer (State) buffer                                                                                                                                             |
 |            | --no-plots                |        | False            | Option to disable plots if the solver results any                                                                                                              |
-
-
-[Describe how to use the project. Include any relevant screenshots, commands, or instructions.]
 
 
 ## Contributors

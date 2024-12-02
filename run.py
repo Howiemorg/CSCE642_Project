@@ -20,7 +20,7 @@ def build_parser():
         "--agent",
         dest="solver",
         type="string",
-        default="random",
+        default="myddpg",
         help="Solver from " + str(avs.solvers),
     )
     parser.add_option(
@@ -52,7 +52,7 @@ def build_parser():
         "--layers",
         dest="layers",
         type="string",
-        default="[128,64]",
+        default="[512,256]",
         help='size of hidden layers in a Deep neural net. e.g., "[10,15]" creates a net where the'
         "Input layer is connected to a layer of size 10 that is connected to a layer of size 15"
         " that is connected to the output",
@@ -62,7 +62,7 @@ def build_parser():
         "--actor_alpha",
         dest="actor_alpha",
         type="float",
-        default=3e-4,
+        default=3e-3,
         help="The learning rate (alpha) for updating actor network parameters",
     )
     parser.add_option(
@@ -70,8 +70,16 @@ def build_parser():
         "--critic_alpha",
         dest="critic_alpha",
         type="float",
-        default=3e-3,
+        default=3e-5,
         help="The learning rate (alpha) for updating critic network parameters",
+    )
+    parser.add_option(
+        "-t",
+        "--steps",
+        type="int",
+        dest="steps",
+        default=10000,
+        help="Maximal number of steps per episode",
     )
     parser.add_option(
         # "-A",
@@ -102,7 +110,7 @@ def build_parser():
         "--gamma",
         dest="gamma",
         type="float",
-        default=1.00,
+        default=0.99,
         help="The discount factor (gamma)",
     )
     parser.add_option(
@@ -142,7 +150,7 @@ def build_parser():
         "--batch_size",
         type="int",
         dest="batch_size",
-        default=32,
+        default=128,
         help="Size of batches to sample from the replay memory",
     )
     parser.add_option(
@@ -181,7 +189,7 @@ def main(options):
     resultdir = "Results/"
 
     resultdir = os.path.abspath(f"./{resultdir}")
-    options.experiment_dir = os.path.abspath(f"./{options.experiment_dir}")
+    # options.experiment_dir = os.path.abspath(f"./{options.experiment_dir}")
 
     # Create result file if one doesn't exist
     print(os.path.join(resultdir, options.outfile + ".csv"))
